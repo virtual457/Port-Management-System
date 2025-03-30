@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Signup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #ffffff;
+            font-family: 'Segoe UI', sans-serif;
+            color: #000000;
+        }
+
+        .signup-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .signup-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .form-control {
+            border-radius: 6px;
+        }
+
+        .btn {
+            border-radius: 6px;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .alert {
+            text-align: center;
+        }
+
+        .error-message {
+            color: red;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+    <script>
+        function validateForm() {
+            const password = document.querySelector('[name="password"]');
+            const confirmPassword = document.querySelector('[name="confirm_password"]');
+            const errorField = document.getElementById("passwordError");
+
+            if (password.value !== confirmPassword.value) {
+                errorField.style.display = "block";
+                return false;
+            } else {
+                errorField.style.display = "none";
+                return true;
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container signup-wrapper">
+        <div class="signup-card">
+            <h3 class="text-center mb-4">Create a New Account</h3>
+
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+            {% if success %}
+                <div class="alert alert-success">{{ success }}</div>
+            {% endif %}
+
+            <form method="post" onsubmit="return validateForm();">
+                {% csrf_token %}
+
+                <div class="row mb-3">
+                    <div class="col">
+                        <label for="first_name">First Name</label>
+                        <input type="text" name="first_name" class="form-control" placeholder="John">
+                    </div>
+                    <div class="col">
+                        <label for="last_name">Last Name</label>
+                        <input type="text" name="last_name" class="form-control" placeholder="Doe">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="username">Username (optional)</label>
+                    <input type="text" name="username" class="form-control" placeholder="CoolCaptain">
+                </div>
+
+                <div class="mb-3">
+                    <label for="email">Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="example@domain.com">
+                </div>
+
+                <div class="mb-3">
+                    <label for="phone">Phone Number</label>
+                    <input type="text" name="phone" class="form-control" placeholder="+1234567890">
+                </div>
+
+                <div class="mb-3">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="confirm_password">Confirm Password</label>
+                    <input type="password" id="confirm_password" name="confirm_password" class="form-control" placeholder="Re-enter your password" required>
+                    <div id="passwordError" class="error-message">Passwords do not match.</div>
+                </div>
+
+                <div class="d-grid mb-3">
+                    <button type="submit" class="btn btn-dark">Create Account</button>
+                </div>
+
+                <div class="btn-group">
+                    <a href="{% url 'login' %}" class="btn btn-outline-secondary w-50">Back to Login</a>
+                    <a href="{% url 'forgot-password' %}" class="btn btn-outline-secondary w-50">Forgot Password</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

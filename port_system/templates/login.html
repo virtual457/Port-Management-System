@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #ffffff;
+            font-family: 'Segoe UI', sans-serif;
+            color: #000000;
+        }
+
+        .login-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            
+        }
+
+        .form-control {
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            color: #000000;
+        }
+
+        .form-control::placeholder {
+            color: #888;
+            opacity: 0.6;
+        }
+
+        .form-control:focus {
+            border-color: #e10600;
+            box-shadow: 0 0 5px rgba(225, 6, 0, 0.3);
+            color: #000000;
+        }
+
+        .btn {
+            border-radius: 6px;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .login-wrapper {
+            min-height: 100vh;
+        }
+
+        h3, label {
+            color: #000000;
+        }
+
+        .alert {
+            color: #fff;
+            background-color: #e10600;
+            border-color: #e10600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container login-wrapper d-flex align-items-center justify-content-center">
+        <div class="login-card col-md-5">
+            <h3 class="text-center mb-4">Login to Your Account</h3>
+
+            {% if error %}
+                <div class="alert alert-danger text-center">{{ error }}</div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="email">Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="Enter your email" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="password">Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Enter your password" required>
+                </div>
+
+                <div class="d-grid mb-3">
+                    <button type="submit" class="btn btn-dark">Login</button>
+                </div>
+
+                <div class="btn-group">
+                    <a href="{% url 'signup' %}" class="btn btn-outline-secondary w-50">Create Account</a>
+                    <a href="{% url 'forgot-password' %}" class="btn btn-outline-secondary w-50">Forgot Password</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
