@@ -81,11 +81,14 @@
 <body>
 <!-- Sidebar -->
 <div class="sidebar" id="sidebar">
-    <h5 class="text-center">Admin Menu</h5>
+    <h5 class="text-center">Menu</h5>
     <hr class="bg-light">
-    <a href="#">Dashboard</a>
-    <a href="#">Manage Users</a>
-    <a href="#">Manage Ports</a>
+    <a href="/admin/dashboard">Admin Dashboard</a>
+    <a href="/manager/dashboard">Manager Dashboard</a>
+    <a href="/staff/dashboard">Staff Dashboard</a>
+    <a href="/customer/dashboard">Customer Dashboard</a>
+    <a href="/admin/manage-users">Manage Users</a>
+    <a href="/admin/manage-ports">Manage Ports</a>
 </div>
 
 <!-- Navbar -->
@@ -93,13 +96,10 @@
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
         <a class="navbar-brand mb-0" href="#">
-            {% if username %}
-                Admin - {{ username }}
-            {% else %}
-                Admin Panel
-            {% endif %}
+            Port System
         </a>
         <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Captain Anonymous" }}</strong></span>
             <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
         </div>
     </div>

@@ -11,6 +11,8 @@
             background-color: #ffffff;
             font-family: 'Segoe UI', sans-serif;
             color: #000000;
+            margin: 0;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
         }
 
         /* Sidebar styling */
@@ -68,7 +70,7 @@
         }
 
         .dashboard-wrapper {
-            min-height: 100vh;
+            height : calc(100vh - 95px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -97,6 +99,13 @@
             display: flex;
             align-items: center;
         }
+
+        .sidebar-open .navbar {
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
     </style>
 </head>
 <body>
