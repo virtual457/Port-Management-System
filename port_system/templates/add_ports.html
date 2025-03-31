@@ -92,9 +92,16 @@
       // Fetch country using reverse geocoding
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
         .then(response => response.json())
+        
         .then(data => {
+            console.log(data); // For debugging purposes
           const country = data.address?.country || '';
           countryField.value = country;
+          console.log('Country:', country); // For debugging purposes
+          if (!country) {
+            console.error('Country not found for the given coordinates.');
+            countryField.value = 'Unknown';
+          }
         })
         .catch(err => {
           console.error('Reverse geocoding failed:', err);
