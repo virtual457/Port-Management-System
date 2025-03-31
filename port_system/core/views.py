@@ -180,7 +180,7 @@ def admin_manage_ports(request):
     page_number = request.GET.get('page', 1)
 
     query = """
-        SELECT port_id, name, country, location, status
+        SELECT port_id, name, country, ST_Y(location) AS lat, ST_X(location) AS lng, status
         FROM ports
         WHERE (%s IS NULL OR name LIKE CONCAT('%%', %s, '%%'))
           AND (%s IS NULL OR country LIKE CONCAT('%%', %s, '%%'))
@@ -199,11 +199,14 @@ def admin_manage_ports(request):
             'id': row[0],
             'name': row[1],
             'country': row[2],
-            'location': row[3],
-            'status': row[4]
+            'lat': row[3],
+            'lng': row[4],
+            'status': row[5]
         }
         for row in ports_raw
     ]
+
+    print(ports_list)
 
     paginator = Paginator(ports_list, 5)
     ports_page = paginator.get_page(page_number)
