@@ -20,6 +20,7 @@ urlpatterns = [
     path('customer/dashboard/', views.customer_dashboard, name='customer-dashboard'),
     path('admin/manage-users/', views.admin_manage_users, name='manage-users'), 
     path('admin/manage-ports/', views.admin_manage_ports, name='manage-ports'), 
+    path('admin/ports/add/', views.admin_ports_add, name='add-ports'), 
 
     
 ]

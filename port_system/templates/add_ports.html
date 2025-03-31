@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Port</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .add-port-wrapper {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container add-port-wrapper">
+    <div class="card">
+      <h3 class="mb-4 text-center">Add New Port</h3>
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label for="name" class="form-label">Port Name</label>
+          <input type="text" name="name" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="country" class="form-label">Country</label>
+            <input type="text" name="country" id="country" class="form-control" readonly required>
+          </div>
+          
+
+        <div class="mb-3">
+            <label class="form-label">Select Location on Map</label>
+            <div id="map" style="height: 300px; border-radius: 8px;"></div>
+            <input type="hidden" name="location" id="location">
+          </div>
+          
+
+        <div class="mb-3">
+          <label for="status" class="form-label">Status</label>
+          <select name="status" class="form-select" required>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+
+        <div class="d-grid">
+          <button type="submit" class="btn btn-success">Add Port</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+    const map = L.map('map').setView([20.5937, 78.9629], 4);  // Center on India
+    const locationField = document.getElementById('location');
+    const countryField = document.getElementById('country');
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data © OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker;
+
+    map.on('click', function (e) {
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+      locationField.value = `${lat},${lng}`;
+
+      if (marker) {
+        marker.setLatLng(e.latlng);
+      } else {
+        marker = L.marker(e.latlng).addTo(map);
+      }
+
+      // Fetch country using reverse geocoding
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+        .then(response => response.json())
+        .then(data => {
+          const country = data.address?.country || '';
+          countryField.value = country;
+        })
+        .catch(err => {
+          console.error('Reverse geocoding failed:', err);
+          countryField.value = '';
+        });
+    });
+  });
+  </script>
+  
+</html>

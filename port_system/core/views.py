@@ -4,6 +4,7 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.contrib import messages
 
 
 def login_view(request):
@@ -210,3 +211,30 @@ def admin_manage_ports(request):
     return render(request, 'manage_ports.html', {
         'ports': ports_page
     })
+
+@role_required('admin')
+def admin_ports_add(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        country = request.POST.get('country')
+        lat, lng = request.POST.get('location').split(',')
+        location_point = f"POINT({lng} {lat})"  # Note: lng first, then lat (MySQL syntax)
+
+        status = request.POST.get('status')
+
+        print("got thesse values from the form", name, country, location_point, status)
+        if not (name and country and location_point and status):
+            messages.error(request, "All fields are required.")
+            return render(request, 'add_ports.html')
+
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO ports (name, country, location, status)
+                VALUES (%s, %s, ST_GeomFromText(%s), %s)
+                """, [name, country, location_point, status])
+
+
+        messages.success(request, f"Port '{name}' added successfully!")
+        return redirect('manage-ports')  # Update this URL name based on your routes
+
+    return render(request, 'add_ports.html')
