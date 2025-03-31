@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Users</title>
+    <title>Manage Ports</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -80,8 +80,8 @@
     <h5 class="text-center">Admin Menu</h5>
     <hr class="bg-light">
     <a href="#">Dashboard</a>
-    <a href="#">Manage Ports</a>
     <a href="#">Manage Users</a>
+    <a href="#">Manage Ports</a>
 </div>
 
 <!-- Navbar -->
@@ -104,111 +104,84 @@
 <!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
-        <h3 class="mb-4 text-center">Manage Users</h3>
+        <h3 class="mb-4 text-center">Manage Ports</h3>
 
-        <!-- Add User Form -->
-        <form method="post" action="/admin/users/add/">
-            {% csrf_token %}
-            <div class="row g-3 align-items-center">
-                <div class="col-md-4">
-                    <input type="text" name="username" class="form-control" placeholder="Username" required>
-                </div>
-                <div class="col-md-4">
-                    <input type="email" name="email" class="form-control" placeholder="Email" required>
+        <!-- Filter Ports -->
+        <form method="get" class="mb-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <input type="text" name="name" value="{{ request.GET.name }}" class="form-control" placeholder="Filter by name">
                 </div>
                 <div class="col-md-3">
-                    <select name="role" class="form-select" required>
-                        <option value="">Select Role</option>
-                        <option value="admin">Admin</option>
-                        <option value="manager">Manager</option>
-                        <option value="staff">Staff</option>
-                        <option value="customer">Customer</option>
+                    <input type="text" name="country" value="{{ request.GET.country }}" class="form-control" placeholder="Filter by country">
+                </div>
+                <div class="col-md-3">
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
                     </select>
                 </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-dark w-100">Add</button>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
+                    <a href="/admin/ports/add/" class="btn btn-dark">Add Port</a>
                 </div>
             </div>
         </form>
 
         <hr class="my-4">
 
-        <!-- Filter Users -->
-        <form method="get" class="mb-3">
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <input type="text" name="username" value="{{ request.GET.username }}" class="form-control" placeholder="Filter by username">
-                </div>
-                <div class="col-md-3">
-                    <input type="email" name="email" value="{{ request.GET.email }}" class="form-control" placeholder="Filter by email">
-                </div>
-                <div class="col-md-3">
-                    <select name="role" class="form-select">
-                        <option value="">All Roles</option>
-                        <option value="admin" {% if request.GET.role == 'admin' %}selected{% endif %}>Admin</option>
-                        <option value="manager" {% if request.GET.role == 'manager' %}selected{% endif %}>Manager</option>
-                        <option value="staff" {% if request.GET.role == 'staff' %}selected{% endif %}>Staff</option>
-                        <option value="customer" {% if request.GET.role == 'customer' %}selected{% endif %}>Customer</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
-                </div>
-            </div>
-        </form>
-
-        <!-- User List -->
-        <!-- User Table -->
-<div class="table-responsive">
-    <table class="table table-bordered table-striped">
-        <thead class="table-dark">
-            <tr>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th class="text-center">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-                <tr>
-                    <td>{{ user.username }}</td>
-                    <td>{{ user.email }}</td>
-                    <td>{{ user.role }}</td>
-                    <td class="text-center">
-                        <a href="/admin/users/edit/{{ user.user_id }}/" class="btn btn-outline-primary btn-sm">Edit</a>
-                        <a href="/admin/users/delete/{{ user.user_id }}/" class="btn btn-outline-danger btn-sm">Delete</a>
-                    </td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center text-muted">Oops! No users here. It's lonelier than a ship without a crew. 🚣️</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
+        <!-- Port Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Port Name</th>
+                        <th>Country</th>
+                        <th>Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for port in ports %}
+                        <tr>
+                            <td>{{ port.name }}</td>
+                            <td>{{ port.country }}</td>
+                            <td>{{ port.status }}</td>
+                            <td class="text-center">
+                                <a href="/admin/ports/view/{{ port.id }}/" class="btn btn-outline-info btn-sm">View Map</a>
+                                <a href="/admin/ports/edit/{{ port.id }}/" class="btn btn-outline-primary btn-sm">Edit</a>
+                                <a href="/admin/ports/delete/{{ port.id }}/" class="btn btn-outline-danger btn-sm">Delete</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No ports found. It's more deserted than a dry dock on holiday. ⚓</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
         <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
-                    {% if users.has_previous %}
+                    {% if ports.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ users.previous_page_number }}&username={{ request.GET.username }}&email={{ request.GET.email }}&role={{ request.GET.role }}">Previous</a>
+                            <a class="page-link" href="?page={{ ports.previous_page_number }}">Previous</a>
                         </li>
                     {% endif %}
 
-                    {% for num in users.paginator.page_range %}
-                        <li class="page-item {% if users.number == num %}active{% endif %}">
-                            <a class="page-link" href="?page={{ num }}&username={{ request.GET.username }}&email={{ request.GET.email }}&role={{ request.GET.role }}">{{ num }}</a>
+                    {% for num in ports.paginator.page_range %}
+                        <li class="page-item {% if ports.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
                         </li>
                     {% endfor %}
 
-                    {% if users.has_next %}
+                    {% if ports.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ users.next_page_number }}&username={{ request.GET.username }}&email={{ request.GET.email }}&role={{ request.GET.role }}">Next</a>
+                            <a class="page-link" href="?page={{ ports.next_page_number }}">Next</a>
                         </li>
                     {% endif %}
                 </ul>
@@ -216,6 +189,9 @@
         </div>
     </div>
 </div>
+
+
+
 
 <script>
     const toggle = document.getElementById('sidebarToggle');

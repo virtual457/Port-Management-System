@@ -18,7 +18,8 @@ urlpatterns = [
     path('manager/dashboard/', views.manager_dashboard, name='manager-dashboard'),
     path('staff/dashboard/', views.staff_dashboard, name='staff-dashboard'),
     path('customer/dashboard/', views.customer_dashboard, name='customer-dashboard'),
-    path('admin/manage-users/', views.customer_dashboard, name='manage-users'), 
+    path('admin/manage-users/', views.admin_manage_users, name='manage-users'), 
+    path('admin/manage-ports/', views.admin_manage_ports, name='manage-ports'), 
 
     
 ]

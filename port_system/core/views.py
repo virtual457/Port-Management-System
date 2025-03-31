@@ -3,6 +3,8 @@ from django.db import connection
 from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+
 
 def login_view(request):
     if request.method == 'POST':
@@ -139,3 +141,72 @@ def staff_dashboard(request):
 @role_required('customer')
 def customer_dashboard(request):
     return render(request, 'customer_dashboard.html')
+
+
+#can be optimized using a limit and offset for pagination in the stored procedure.
+@role_required('admin')
+def admin_manage_users(request):
+    username = request.GET.get('username', '').strip() or None
+    email = request.GET.get('email', '').strip() or None
+    role = request.GET.get('role', '').strip() or None
+    page_number = request.GET.get('page', 1)
+
+    with connection.cursor() as cursor:
+        # Call the stored procedure to get all filtered users
+        cursor.callproc('filter_users_advanced', [username, email, role])
+        users_raw = cursor.fetchall()
+
+    # Prepare user list
+    users_list = [
+        {'user_id': row[0], 'username': row[1], 'email': row[2], 'role': row[3]}
+        for row in users_raw
+    ]
+
+    # Apply pagination in Python
+    paginator = Paginator(users_list, 5)  # Show 5 users per page
+    users_page = paginator.get_page(page_number)
+
+    return render(request, 'manage_users.html', {
+        'users': users_page
+    })
+
+
+@role_required('admin')
+def admin_manage_ports(request):
+    name = request.GET.get('name', '').strip() or None
+    country = request.GET.get('country', '').strip() or None
+    status = request.GET.get('status', '').strip() or None
+    page_number = request.GET.get('page', 1)
+
+    query = """
+        SELECT port_id, name, country, location, status
+        FROM ports
+        WHERE (%s IS NULL OR name LIKE CONCAT('%%', %s, '%%'))
+          AND (%s IS NULL OR country LIKE CONCAT('%%', %s, '%%'))
+          AND (%s IS NULL OR status = %s)
+        ORDER BY created_at DESC
+    """
+
+    params = [name, name, country, country, status, status]
+
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        ports_raw = cursor.fetchall()
+
+    ports_list = [
+        {
+            'id': row[0],
+            'name': row[1],
+            'country': row[2],
+            'location': row[3],
+            'status': row[4]
+        }
+        for row in ports_raw
+    ]
+
+    paginator = Paginator(ports_list, 5)
+    ports_page = paginator.get_page(page_number)
+
+    return render(request, 'manage_ports.html', {
+        'ports': ports_page
+    })

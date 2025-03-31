@@ -15,7 +15,6 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
 -- Roles table (admin, manager, staff, guest, etc.)
 CREATE TABLE roles (
     role_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -31,14 +30,6 @@ CREATE TABLE user_roles (
     PRIMARY KEY (user_id, role_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE
-);
-
--- Ports table
-CREATE TABLE ports (
-    port_id INT AUTO_INCREMENT PRIMARY KEY,
-    port_name VARCHAR(100) NOT NULL,
-    location VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE FUNCTION get_full_name(uid INT)
@@ -77,5 +68,16 @@ END$$
 
 DELIMITER ;
 
+-- Ports table
 
+drop table if exists ports;
+CREATE TABLE ports (
+    port_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    country VARCHAR(100) NOT NULL,
+    location POINT NOT NULL,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    SPATIAL INDEX(location)
+);
 
