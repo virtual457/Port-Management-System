@@ -81,3 +81,244 @@ CREATE TABLE ports (
     SPATIAL INDEX(location)
 );
 
+-- Customer create tables and procedures to manage the cargo
+-- Stored procedure to get username by user_id
+DELIMITER //
+CREATE FUNCTION get_username(p_user_id INT) 
+RETURNS VARCHAR(255)
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE username VARCHAR(255);
+    
+    SELECT u.username INTO username
+    FROM users u
+    WHERE u.user_id = p_user_id;
+    
+    RETURN username;
+END //
+DELIMITER ;
+
+-- Stored procedure to get filtered cargo for a customer
+DELIMITER //
+CREATE PROCEDURE get_customer_cargo(
+    IN p_user_id INT,
+    IN p_description VARCHAR(255),
+    IN p_cargo_type VARCHAR(50),
+    IN p_status VARCHAR(50)
+)
+BEGIN
+    SELECT 
+        cargo_id, 
+        description, 
+        cargo_type, 
+        weight, 
+        dimensions, 
+        special_instructions, 
+        status,
+        created_at
+    FROM cargo
+    WHERE user_id = p_user_id
+      AND (p_description IS NULL OR description LIKE CONCAT('%', p_description, '%'))
+      AND (p_cargo_type IS NULL OR cargo_type = p_cargo_type)
+      AND (p_status IS NULL OR status = p_status)
+    ORDER BY created_at DESC;
+END //
+DELIMITER ;
+
+-- Stored procedure to add new cargo
+DELIMITER //
+CREATE PROCEDURE add_customer_cargo(
+    IN p_user_id INT,
+    IN p_description VARCHAR(255),
+    IN p_cargo_type VARCHAR(50),
+    IN p_weight DECIMAL(10,2),
+    IN p_dimensions VARCHAR(100),
+    IN p_special_instructions TEXT
+)
+BEGIN
+    INSERT INTO cargo (
+        user_id, 
+        description, 
+        cargo_type, 
+        weight, 
+        dimensions, 
+        special_instructions, 
+        status
+    ) VALUES (
+        p_user_id, 
+        p_description, 
+        p_cargo_type, 
+        p_weight, 
+        p_dimensions, 
+        p_special_instructions, 
+        'pending'
+    );
+    
+    -- Return the ID of the newly created cargo
+    SELECT LAST_INSERT_ID() AS cargo_id;
+END //
+DELIMITER ;
+
+-- Stored procedure to update cargo
+DELIMITER //
+CREATE PROCEDURE update_customer_cargo(
+    IN p_cargo_id INT,
+    IN p_user_id INT,
+    IN p_description VARCHAR(255),
+    IN p_cargo_type VARCHAR(50),
+    IN p_weight DECIMAL(10,2),
+    IN p_dimensions VARCHAR(100),
+    IN p_special_instructions TEXT
+)
+BEGIN
+    DECLARE cargo_exists INT;
+    DECLARE update_allowed INT;
+    
+    -- Check if cargo exists and belongs to the user
+    SELECT COUNT(*) INTO cargo_exists
+    FROM cargo
+    WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+    
+    -- Check if cargo is in a state that allows updates
+    SELECT COUNT(*) INTO update_allowed
+    FROM cargo
+    WHERE cargo_id = p_cargo_id 
+      AND user_id = p_user_id
+      AND (status = 'pending' OR status = 'booked');
+    
+    -- Only update if cargo exists, belongs to the user, and is in an updatable state
+    IF cargo_exists > 0 AND update_allowed > 0 THEN
+        UPDATE cargo 
+        SET description = p_description,
+            cargo_type = p_cargo_type,
+            weight = p_weight,
+            dimensions = p_dimensions,
+            special_instructions = p_special_instructions
+        WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+        
+        -- Return success code
+        SELECT 1 AS status;
+    ELSE
+        -- Return failure code
+        SELECT 0 AS status;
+    END IF;
+END //
+DELIMITER ;
+
+-- Stored procedure to delete cargo
+DELIMITER //
+CREATE PROCEDURE delete_customer_cargo(
+    IN p_cargo_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    DECLARE cargo_exists INT;
+    DECLARE delete_allowed INT;
+    
+    -- Check if cargo exists and belongs to the user
+    SELECT COUNT(*) INTO cargo_exists
+    FROM cargo
+    WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+    
+    -- Check if cargo is in a state that allows deletion (only pending)
+    SELECT COUNT(*) INTO delete_allowed
+    FROM cargo
+    WHERE cargo_id = p_cargo_id 
+      AND user_id = p_user_id
+      AND status = 'pending';
+    
+    -- Only delete if cargo exists, belongs to the user, and is in a deletable state
+    IF cargo_exists > 0 AND delete_allowed > 0 THEN
+        DELETE FROM cargo 
+        WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+        
+        -- Return success code
+        SELECT 1 AS status;
+    ELSE
+        -- Return failure code
+        SELECT 0 AS status;
+    END IF;
+END //
+DELIMITER ;
+
+-- Cargo table creation script (if needed)
+
+CREATE TABLE IF NOT EXISTS cargo (
+    cargo_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    cargo_type VARCHAR(50) NOT NULL,
+    weight DECIMAL(10,2) NOT NULL,
+    dimensions VARCHAR(100),
+    special_instructions TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- Use the port database
+USE port;
+
+-- Insert sample users
+-- Password for Chandan is hashed value of 'Chandan@1998'
+INSERT INTO users (username, first_name, last_name, phone_number, email, password) VALUES
+('chandan', 'Chandan', 'Keelara', '+19876543210', 'chandan.keelara@gmail.com', '$2y$10$GfVYzRpHzL6bUx5YJ8HaY.3uPK4oHYQ3L8MlXvvQJN9Kcx6KKq4eO'),
+('johndoe', 'John', 'Doe', '+12345678901', 'john.doe@example.com', '$2y$10$JKfHS9jYpfLNIx.G5hZTNO1UbFT9ZVrJvzJ4Ly6o4BWvdmZl5xM3K'),
+('janedoe', 'Jane', 'Doe', '+12345678902', 'jane.doe@example.com', '$2y$10$bXIQxIBbDR4hPWLIzl7i/evWPl2HBceztg5Afr/VSzCsKxURZj0ji'),
+('bobsmith', 'Bob', 'Smith', '+12345678903', 'bob.smith@example.com', '$2y$10$JGLPMmUQu5PDW0aNUVT.3.MhlHlzz9JZVWBtlALGsAgMjWnhCKVXy'),
+('alicejones', 'Alice', 'Jones', '+12345678904', 'alice.jones@example.com', '$2y$10$6yJrUoP21JYpRCENzRvdJuzyvOFZElvMxCb7LtJ.JUgEEQvdLNqyy'),
+('mikebrown', 'Mike', 'Brown', '+12345678905', 'mike.brown@example.com', '$2y$10$bpY6rEsHlIKP7n76UW1n9OO8jmNpQCHZDSApLRlXvSSfY1PkKxjqi');
+
+-- Assign roles to users
+-- Assign all roles to Chandan
+INSERT INTO user_roles (user_id, role_id) VALUES
+(1, 1), -- chandan - admin
+(1, 2), -- chandan - manager
+(1, 3), -- chandan - staff
+(1, 4), -- chandan - customer
+(2, 1), -- johndoe - admin
+(3, 2), -- janedoe - manager
+(4, 3), -- bobsmith - staff
+(5, 4), -- alicejones - customer
+(6, 4); -- mikebrown - customer
+
+-- Insert sample ports
+INSERT INTO ports (name, country, location, status) VALUES
+('Port of New York', 'USA', POINT(-74.0060, 40.7128), 'active'),
+('Port of Los Angeles', 'USA', POINT(-118.2437, 33.7701), 'active'),
+('Port of Rotterdam', 'Netherlands', POINT(4.4059, 51.9244), 'active'),
+('Port of Shanghai', 'China', POINT(121.8947, 30.8718), 'active'),
+('Port of Singapore', 'Singapore', POINT(103.8198, 1.2649), 'active'),
+('Port of Santos', 'Brazil', POINT(-46.3130, -23.9619), 'active'),
+('Port of Dubai', 'UAE', POINT(55.2708, 25.2048), 'active'),
+('Port of Sydney', 'Australia', POINT(151.2093, -33.8688), 'active'),
+('Port of Cape Town', 'South Africa', POINT(18.4241, -33.9249), 'active'),
+('Port of Mombasa', 'Kenya', POINT(39.6682, -4.0435), 'inactive');
+
+-- Insert sample cargo for different customers
+
+INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special_instructions, status) VALUES
+(1, 'Electronics Shipment', 'container', 5000.00, '20x8x8.5', 'Handle with care. Keep dry.', 'pending'),
+(1, 'Machine Parts', 'container', 12000.50, '40x8x8.5', 'Heavy equipment inside.', 'booked'),
+(1, 'Refrigerated Goods', 'container', 8000.75, '40x8x8.5', 'Maintain temperature between 2-4°C', 'in_transit'),
+
+(5, 'Furniture Set', 'container', 3500.00, '20×8×8.5', 'Fragile items inside.', 'pending'),
+(5, 'Office Supplies', 'bulk', 1200.00, '8×6×4', 'Standard handling.', 'booked'),
+(5, 'Textiles', 'bulk', 750.50, '5×4×3', 'Keep away from moisture.', 'delivered'),
+
+(6, 'Construction Materials', 'bulk', 15000.00, '30×10×5', 'Heavy materials.', 'pending'),
+(6, 'Vehicles - 3 Cars', 'vehicle', 5200.00, '40×8×8.5', 'Luxury vehicles, special handling required.', 'booked'),
+(6, 'Industrial Chemicals', 'liquid', 12000.00, '20×8×8.5', 'Hazardous materials. Follow safety protocols.', 'in_transit'),
+(6, 'Medical Supplies', 'container', 2800.00, '20×8×8.5', 'Priority shipment. Temperature controlled.', 'delivered');
+
+
+-- Add more varied cargo types for filtering demo
+INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special_instructions, status) VALUES
+(1, 'Crude Oil Shipment', 'liquid', 25000.00, '40×8×8.5', 'Flammable liquid.', 'pending'),
+(1, 'Luxury Yacht', 'vehicle', 18000.00, '60×15×20', 'High-value item. Special insurance.', 'pending'),
+(5, 'Grain Shipment', 'bulk', 22000.00, '40×8×8.5', 'Keep dry. Avoid contamination.', 'pending'),
+(5, 'Automotive Parts', 'container', 8500.00, '20×8×8.5', 'OEM parts for assembly line.', 'booked'),
+(6, 'Wine Barrels', 'container', 4200.00, '20×8×8.5', 'Temperature controlled. Handle with care.', 'pending'),
+(6, 'Milk Products', 'liquid', 10000.00, '20×8×8.5', 'Refrigerated transport required.', 'booked');

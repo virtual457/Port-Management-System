@@ -241,3 +241,197 @@ def admin_ports_add(request):
         return redirect('manage-ports')  # Update this URL name based on your routes
 
     return render(request, 'add_ports.html')
+
+
+#Customer specific view to cargo
+from django.shortcuts import render, redirect
+from django.db import connection
+from django.core.paginator import Paginator
+from django.contrib import messages
+from django.http import JsonResponse
+import json
+
+# Import your role_required decorator
+from .views import role_required  # Adjust the import path as needed
+
+
+@role_required('customer')
+def customer_manage_cargo(request):
+    """
+    View function for managing customer cargo.
+    Uses stored procedure to filter and retrieve cargo items.
+    """
+    # Get filter parameters from request
+    description = request.GET.get('description', '').strip() or None
+    cargo_type = request.GET.get('type', '').strip() or None
+    status = request.GET.get('status', '').strip() or None
+    page_number = request.GET.get('page', 1)
+    
+    # Get user_id from session
+    user_id = request.session.get('user_id')
+    
+    with connection.cursor() as cursor:
+        # Call the stored procedure to get filtered cargo items
+        cursor.callproc('get_customer_cargo', [user_id, description, cargo_type, status])
+        cargo_raw = cursor.fetchall()
+    
+    # Transform raw data to dictionary list
+    cargos_list = [
+        {
+            'id': row[0],
+            'description': row[1],
+            'type': row[2],
+            'weight': row[3],
+            'dimensions': row[4],
+            'special_instructions': row[5],
+            'status': row[6],
+            'created_at': row[7]
+        }
+        for row in cargo_raw
+    ]
+    
+    # Apply pagination
+    paginator = Paginator(cargos_list, 5)  # Show 5 cargo items per page
+    cargos_page = paginator.get_page(page_number)
+    
+    # Get username for display in navbar
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT get_username(%s)", [user_id])
+        username = cursor.fetchone()[0]
+    
+    context = {
+        'cargos': cargos_page,
+        'username': username
+    }
+    
+    return render(request, 'customer_manage_cargo.html', context)
+
+
+@role_required('customer')
+def customer_add_cargo(request):
+    """
+    View function to add a new cargo item.
+    Uses stored procedure to insert cargo.
+    """
+    if request.method == 'POST':
+        # Get form data
+        description = request.POST.get('description')
+        cargo_type = request.POST.get('type')
+        weight = request.POST.get('weight')
+        dimensions = request.POST.get('dimensions', '')
+        special_instructions = request.POST.get('special_instructions', '')
+        
+        # Get user_id from session
+        user_id = request.session.get('user_id')
+        
+        # Validate required fields
+        if not (description and cargo_type and weight):
+            messages.error(request, "Required fields are missing.")
+            return redirect('customer-manage-cargo')
+        
+        # Call stored procedure to add cargo
+        with connection.cursor() as cursor:
+            cursor.callproc('add_customer_cargo', [
+                user_id, 
+                description, 
+                cargo_type, 
+                weight, 
+                dimensions, 
+                special_instructions
+            ])
+            # Get result - some DBs return status, others may not need this line
+            result = cursor.fetchone() 
+        
+        messages.success(request, f"Cargo '{description}' added successfully!")
+        return redirect('customer-manage-cargo')
+    
+    # If not POST, redirect back to manage page
+    return redirect('customer-manage-cargo')
+
+
+@role_required('customer')
+def customer_edit_cargo(request):
+    """
+    View function to edit an existing cargo item.
+    Uses stored procedure to update cargo.
+    """
+    if request.method == 'POST':
+        # Get form data
+        cargo_id = request.POST.get('id')
+        description = request.POST.get('description')
+        cargo_type = request.POST.get('type')
+        weight = request.POST.get('weight')
+        dimensions = request.POST.get('dimensions', '')
+        special_instructions = request.POST.get('special_instructions', '')
+        
+        # Get user_id from session
+        user_id = request.session.get('user_id')
+        
+        # Validate required fields
+        if not (cargo_id and description and cargo_type and weight):
+            messages.error(request, "Required fields are missing.")
+            return redirect('customer-manage-cargo')
+        
+        # Call stored procedure to update cargo
+        with connection.cursor() as cursor:
+            cursor.callproc('update_customer_cargo', [
+                cargo_id,
+                user_id,
+                description, 
+                cargo_type, 
+                weight, 
+                dimensions, 
+                special_instructions
+            ])
+            
+            # Get result status from procedure
+            result = cursor.fetchone()
+            
+            # Check if update was successful (procedure returns 1 for success, 0 for failure)
+            if result and result[0] == 0:
+                messages.error(request, "Failed to update cargo. Either it doesn't exist or you don't have permission.")
+                return redirect('customer-manage-cargo')
+        
+        messages.success(request, f"Cargo '{description}' updated successfully!")
+        return redirect('customer-manage-cargo')
+    
+    # If not POST, redirect back to manage page
+    return redirect('customer-manage-cargo')
+
+
+@role_required('customer')
+def customer_delete_cargo(request):
+    """
+    View function to delete a cargo item.
+    Uses stored procedure to delete cargo.
+    """
+    if request.method == 'POST':
+        cargo_id = request.POST.get('id')
+        user_id = request.session.get('user_id')
+        
+        if not cargo_id:
+            messages.error(request, "No cargo specified.")
+            return redirect('customer-manage-cargo')
+        
+        # Call stored procedure to delete cargo
+        with connection.cursor() as cursor:
+            cursor.callproc('delete_customer_cargo', [cargo_id, user_id])
+            
+            # Get result status from procedure
+            result = cursor.fetchone()
+            
+            # Procedure returns status code and message
+            if result:
+                status_code = result[0]
+                
+                if status_code == 0:
+                    messages.error(request, "Cannot delete this cargo. It may not exist, you may not have permission, or it's already booked.")
+                elif status_code == 1:
+                    messages.success(request, "Cargo deleted successfully!")
+            else:
+                messages.error(request, "An error occurred while trying to delete cargo.")
+        
+        return redirect('customer-manage-cargo')
+    
+    # If not POST, redirect back to manage page
+    return redirect('customer-manage-cargo')

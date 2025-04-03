@@ -13,6 +13,13 @@ urlpatterns = [
     # Role selection
     path('choose-role/', views.choose_role_view, name='choose-role'),
 
+    #cutomer specific paths
+    path('customer/cargo/', views.customer_manage_cargo, name='customer-manage-cargo'),
+    path('customer/cargo/add/', views.customer_add_cargo, name='customer-add-cargo'),
+    path('customer/cargo/edit/', views.customer_edit_cargo, name='customer-edit-cargo'),
+    path('customer/cargo/delete/', views.customer_delete_cargo, name='customer-delete-cargo'),
+    
+
     # Dashboards (each view checks for correct role)
     path('admin/dashboard/', views.admin_dashboard, name='admin-dashboard'),
     path('manager/dashboard/', views.manager_dashboard, name='manager-dashboard'),
@@ -20,7 +27,7 @@ urlpatterns = [
     path('customer/dashboard/', views.customer_dashboard, name='customer-dashboard'),
     path('admin/manage-users/', views.admin_manage_users, name='manage-users'), 
     path('admin/manage-ports/', views.admin_manage_ports, name='manage-ports'), 
-    path('admin/ports/add/', views.admin_ports_add, name='add-ports'), 
+    path('admin/ports/add/', views.admin_ports_add, name='add-ports'),
 
     
 ]
