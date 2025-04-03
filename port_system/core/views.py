@@ -167,8 +167,22 @@ def admin_manage_users(request):
     paginator = Paginator(users_list, 5)  # Show 5 users per page
     users_page = paginator.get_page(page_number)
 
+    # Get all available roles from the database
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT role_id, role_name FROM roles ORDER BY role_name")
+        roles_raw = cursor.fetchall()
+    
+    roles_list = [
+        {
+            'id': row[0],
+            'name': row[1]
+        }
+        for row in roles_raw
+    ]
+
     return render(request, 'manage_users.html', {
-        'users': users_page
+        'users': users_page,
+        'roles': roles_list,  # Pass the roles list to the template
     })
 
 @role_required('admin')
@@ -177,7 +191,9 @@ def admin_users_add(request):
     View function for adding a new user.
     Inserts user information into the database.
     """
+    print("entering admin_users_add view")
     if request.method == 'POST':
+        print("Received POST request to add user")
         username = request.POST.get('username')
         email = request.POST.get('email')
         role = request.POST.get('role')
@@ -192,6 +208,7 @@ def admin_users_add(request):
         
         # Hash the password
         hashed_password = make_password(password)
+        print("hashed password")
         
         try:
             with connection.cursor() as cursor:
@@ -206,7 +223,7 @@ def admin_users_add(request):
                     INSERT INTO users (username, email, password, first_name, last_name, phone_number)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, [username, email, hashed_password, first_name, last_name, phone_number])
-                
+                print("User inserted into database successfully")
                 # Get the user_id of the newly inserted user
                 user_id = cursor.lastrowid
                 
@@ -216,8 +233,8 @@ def admin_users_add(request):
                 
                 if not role_id_result:
                     # If role doesn't exist, create it (fallback, should rarely happen)
-                    cursor.execute("INSERT INTO roles (role_name) VALUES (%s)", [role])
-                    role_id = cursor.lastrowid
+                    print("Error: Role not found")
+                    Exception(f"Role '{role}' does not exist in the database.")    
                 else:
                     role_id = role_id_result[0]
                 
@@ -226,10 +243,11 @@ def admin_users_add(request):
                     "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
                     [user_id, role_id]
                 )
-                
+                print("Role assigned to user successfully")
             messages.success(request, f"User '{username}' added successfully!")
         except Exception as e:
             messages.error(request, f"Error adding user: {str(e)}")
+            print(e)
         
         return redirect('manage-users')
     

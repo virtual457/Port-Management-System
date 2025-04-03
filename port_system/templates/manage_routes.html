@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Routes</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .route-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .route-map {
+            height: 300px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Shipowner Menu</h5>
+    <hr class="bg-light">
+    <a href="/shipowner/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/shipowner/ships"><i class="bi bi-ship me-2"></i> Manage Ships</a>
+    <a href="/shipowner/routes"><i class="bi bi-signpost-split me-2"></i> Manage Routes</a>
+    <a href="/shipowner/schedules"><i class="bi bi-calendar-check me-2"></i> Schedules</a>
+    <a href="/shipowner/cargo-requests"><i class="bi bi-box-seam me-2"></i> Cargo Requests</a>
+    <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-ship me-2"></i> Shipowner Portal
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Captain" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="dashboard-card">
+        <h3 class="mb-4 text-center">Manage Routes</h3>
+
+        <!-- Filter and Create Route Button -->
+        <form method="get" class="mb-3">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <input type="text" name="origin" value="{{ request.GET.origin }}" class="form-control" placeholder="Filter by origin port">
+                </div>
+                <div class="col-md-3">
+                    <input type="text" name="destination" value="{{ request.GET.destination }}" class="form-control" placeholder="Filter by destination port">
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="seasonal" {% if request.GET.status == 'seasonal' %}selected{% endif %}>Seasonal</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#createRouteModal">
+                        <i class="bi bi-plus-circle me-1"></i> Add Route
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <hr class="my-4">
+
+        <!-- Messages/Alerts section -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Routes Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Route Name</th>
+                        <th>Origin</th>
+                        <th>Destination</th>
+                        <th>Distance (NM)</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for route in routes %}
+                        <tr>
+                            <td>{{ route.name }}</td>
+                            <td>{{ route.origin_port }}</td>
+                            <td>{{ route.destination_port }}</td>
+                            <td>{{ route.distance }}</td>
+                            <td>{{ route.duration }} days</td>
+                            <td>
+                                {% if route.status == 'active' %}
+                                    <span class="badge bg-success route-badge">Active</span>
+                                {% elif route.status == 'inactive' %}
+                                    <span class="badge bg-secondary route-badge">Inactive</span>
+                                {% elif route.status == 'seasonal' %}
+                                    <span class="badge bg-info route-badge">Seasonal</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark route-badge">{{ route.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button type="button"
+                                    class="btn btn-outline-info btn-sm view-route-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#viewRouteModal"
+                                    data-id="{{ route.id }}"
+                                    data-name="{{ route.name }}"
+                                    data-origin-id="{{ route.origin_id }}"
+                                    data-origin-name="{{ route.origin_port }}"
+                                    data-origin-lat="{{ route.origin_lat }}"
+                                    data-origin-lng="{{ route.origin_lng }}"
+                                    data-destination-id="{{ route.destination_id }}"
+                                    data-destination-name="{{ route.destination_port }}"
+                                    data-destination-lat="{{ route.destination_lat }}"
+                                    data-destination-lng="{{ route.destination_lng }}"
+                                    data-distance="{{ route.distance }}"
+                                    data-duration="{{ route.duration }}"
+                                    data-status="{{ route.status }}">
+                                    Details
+                                </button>
+                                <button type="button"
+                                    class="btn btn-outline-primary btn-sm edit-route-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editRouteModal"
+                                    data-id="{{ route.id }}"
+                                    data-name="{{ route.name }}"
+                                    data-origin-id="{{ route.origin_id }}"
+                                    data-destination-id="{{ route.destination_id }}"
+                                    data-distance="{{ route.distance }}"
+                                    data-duration="{{ route.duration }}"
+                                    data-status="{{ route.status }}">
+                                    Edit
+                                </button>
+                                <button type="button"
+                                    class="btn btn-outline-danger btn-sm delete-route-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#deleteRouteModal"
+                                    data-id="{{ route.id }}"
+                                    data-name="{{ route.name }}">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">No routes found. Chart a course and establish your first shipping route! 🧭</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="mt-4">
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if routes.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ routes.previous_page_number }}&origin={{ request.GET.origin }}&destination={{ request.GET.destination }}&status={{ request.GET.status }}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in routes.paginator.page_range %}
+                        <li class="page-item {% if routes.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page={{ num }}&origin={{ request.GET.origin }}&destination={{ request.GET.destination }}&status={{ request.GET.status }}">{{ num }}</a>
+                        </li>
+                    {% endfor %}
+
+                    {% if routes.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ routes.next_page_number }}&origin={{ request.GET.origin }}&destination={{ request.GET.destination }}&status={{ request.GET.status }}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Create Route Modal -->
+<div class="modal fade" id="createRouteModal" tabindex="-1" aria-labelledby="createRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createRouteModalLabel">Create New Route</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="createRouteMap" class="route-map"></div>
+                <form id="createRouteForm" method="post" action="/shipowner/routes/add/">
+                    {% csrf_token %}
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="createRouteName" class="form-label">Route Name</label>
+                            <input type="text" class="form-control" id="createRouteName" name="name" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="createRouteOrigin" class="form-label">Origin Port</label>
+                            <select class="form-select" id="createRouteOrigin" name="origin_port" required>
+                                <option value="" selected disabled>Select Origin Port</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}" data-lat="{{ port.lat }}" data-lng="{{ port.lng }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="createRouteDestination" class="form-label">Destination Port</label>
+                            <select class="form-select" id="createRouteDestination" name="destination_port" required>
+                                <option value="" selected disabled>Select Destination Port</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}" data-lat="{{ port.lat }}" data-lng="{{ port.lng }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="createRouteDistance" class="form-label">Distance (Nautical Miles)</label>
+                            <input type="number" step="0.1" min="0" class="form-control" id="createRouteDistance" name="distance" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="createRouteDuration" class="form-label">Duration (Days)</label>
+                            <input type="number" step="0.1" min="0" class="form-control" id="createRouteDuration" name="duration" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="createRouteStatus" class="form-label">Status</label>
+                            <select class="form-select" id="createRouteStatus" name="status" required>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="seasonal">Seasonal</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="createRouteForm" class="btn btn-success">Create Route</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Route Modal -->
+<div class="modal fade" id="viewRouteModal" tabindex="-1" aria-labelledby="viewRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewRouteModalLabel">Route Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="viewRouteMap" class="route-map"></div>
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6>Route Name</h6>
+                        <p id="viewRouteName"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Origin Port</h6>
+                        <p id="viewRouteOrigin"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Destination Port</h6>
+                        <p id="viewRouteDestination"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <h6>Distance</h6>
+                        <p id="viewRouteDistance"></p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Duration</h6>
+                        <p id="viewRouteDuration"></p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Status</h6>
+                        <p id="viewRouteStatus"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Route Modal -->
+<div class="modal fade" id="editRouteModal" tabindex="-1" aria-labelledby="editRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editRouteModalLabel">Edit Route</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="editRouteMap" class="route-map"></div>
+                <form id="editRouteForm" method="post" action="/shipowner/routes/edit/">
+                    {% csrf_token %}
+                    <input type="hidden" id="editRouteId" name="id">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="editRouteName" class="form-label">Route Name</label>
+                            <input type="text" class="form-control" id="editRouteName" name="name" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editRouteOrigin" class="form-label">Origin Port</label>
+                            <select class="form-select" id="editRouteOrigin" name="origin_port" required>
+                                <option value="" disabled>Select Origin Port</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}" data-lat="{{ port.lat }}" data-lng="{{ port.lng }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editRouteDestination" class="form-label">Destination Port</label>
+                            <select class="form-select" id="editRouteDestination" name="destination_port" required>
+                                <option value="" disabled>Select Destination Port</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}" data-lat="{{ port.lat }}" data-lng="{{ port.lng }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="editRouteDistance" class="form-label">Distance (Nautical Miles)</label>
+                            <input type="number" step="0.1" min="0" class="form-control" id="editRouteDistance" name="distance" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editRouteDuration" class="form-label">Duration (Days)</label>
+                            <input type="number" step="0.1" min="0" class="form-control" id="editRouteDuration" name="duration" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editRouteStatus" class="form-label">Status</label>
+                            <select class="form-select" id="editRouteStatus" name="status" required>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="seasonal">Seasonal</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="editRouteForm" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Route Modal -->
+<div class="modal fade" id="deleteRouteModal" tabindex="-1" aria-labelledby="deleteRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteRouteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the route "<span id="deleteRouteName"></span>"?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+                <form id="deleteRouteForm" method="post" action="/shipowner/routes/delete/">
+                    {% csrf_token %}
+                    <input type="hidden" id="deleteRouteId" name="id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteRouteForm" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Modal functionality for route management
+    document.addEventListener('DOMContentLoaded', function() {
+        let createMap, viewMap, editMap;
+        let createOriginMarker, createDestinationMarker, createRouteLine;
+        let viewOriginMarker, viewDestinationMarker, viewRouteLine;
+        let editOriginMarker, editDestinationMarker, editRouteLine;
+
+        // Initialize create route map
+        const createRouteModal = document.getElementById('createRouteModal');
+        if (createRouteModal) {
+            createRouteModal.addEventListener('shown.bs.modal', function() {
+                if (!createMap) {
+                    createMap = L.map('createRouteMap').setView([20, 0], 2);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(createMap);
+                }
+
+                setTimeout(() => {
+                    createMap.invalidateSize();
+                }, 200);
+            });
+
+            // Handle origin port selection
+            const createRouteOrigin = document.getElementById('createRouteOrigin');
+            createRouteOrigin.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const lat = parseFloat(selectedOption.getAttribute('data-lat'));
+                const lng = parseFloat(selectedOption.getAttribute('data-lng'));
+
+                if (!createMap) return;
+
+                if (createOriginMarker) {
+                    createMap.removeLayer(createOriginMarker);
+                }
+
+                createOriginMarker = L.marker([lat, lng]).addTo(createMap)
+                    .bindPopup(`<strong>Origin:</strong> ${selectedOption.text}`).openPopup();
+                
+                updateCreateRouteLine();
+                updateMapBounds();
+            });
+
+            // Handle destination port selection
+            const createRouteDestination = document.getElementById('createRouteDestination');
+            createRouteDestination.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                const lat = parseFloat(selectedOption.getAttribute('data-lat'));
+                const lng = parseFloat(selectedOption.getAttribute('data-lng'));
+
+                if (!createMap) return;
+
+                if (createDestinationMarker) {
+                    createMap.removeLayer(createDestinationMarker);
+                }
+
+                createDestinationMarker = L.marker([lat, lng]).addTo(createMap)
+                    .bindPopup(`<strong>Destination:</strong> ${selectedOption.text}`).openPopup();
+                
+                updateCreateRouteLine();
+                updateMapBounds();
+                
+                // Calculate distance if both markers are present
+                if (createOriginMarker && createDestinationMarker) {
+                    const originLatLng = createOriginMarker.getLatLng();
+                    const destLatLng = createDestinationMarker.getLatLng();
+                    
+                    // Approximate nautical miles calculation (very rough)
+                    const distanceKm = originLatLng.distanceTo(destLatLng) / 1000;
+                    const distanceNM = distanceKm * 0.539957; // Convert km to nautical miles
+                    
+                    document.getElementById('createRouteDistance').value = distanceNM.toFixed(1);
+                    
+                    // Estimate duration (assuming average speed of 15 knots)
+                    const durationDays = distanceNM / (15 * 24);
+                    document.getElementById('createRouteDuration').value = durationDays.toFixed(1);
+                }
+            });
+            
+            function updateCreateRouteLine() {
+                if (createOriginMarker && createDestinationMarker) {
+                    const originLatLng = createOriginMarker.getLatLng();
+                    const destLatLng = createDestinationMarker.getLatLng();
+                    
+                    if (createRouteLine) {
+                        createMap.removeLayer(createRouteLine);
+                    }
+                    
+                    createRouteLine = L.polyline([originLatLng, destLatLng], {
+                        color: 'blue',
+                        weight: 3,
+                        opacity: 0.7,
+                        dashArray: '10, 10'
+                    }).addTo(createMap);
+                }
+            }
+            
+            function updateMapBounds() {
+                const bounds = [];
+                
+                if (createOriginMarker) {
+                    bounds.push(createOriginMarker.getLatLng());
+                }
+                
+                if (createDestinationMarker) {
+                    bounds.push(createDestinationMarker.getLatLng());
+                }
+                
+                if (bounds.length > 0) {
+                    createMap.fitBounds(bounds, {
+                        padding: [50, 50]
+                    });
+                }
+            }
+        }
+
+        // View Route Modal
+        const viewRouteModal = document.getElementById('viewRouteModal');
+        if (viewRouteModal) {
+            viewRouteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                const originName = button.getAttribute('data-origin-name');
+                const originLat = parseFloat(button.getAttribute('data-origin-lat'));
+                const originLng = parseFloat(button.getAttribute('data-origin-lng'));
+                const destName = button.getAttribute('data-destination-name');
+                const destLat = parseFloat(button.getAttribute('data-destination-lat'));
+                const destLng = parseFloat(button.getAttribute('data-destination-lng'));
+                const distance = button.getAttribute('data-distance');
+                const duration = button.getAttribute('data-duration');
+                const status = button.getAttribute('data-status');
+                
+                // Update modal content
+                document.getElementById('viewRouteName').textContent = name;
+                document.getElementById('viewRouteOrigin').textContent = originName;
+                document.getElementById('viewRouteDestination').textContent = destName;
+                document.getElementById('viewRouteDistance').textContent = `${distance} Nautical Miles`;
+                document.getElementById('viewRouteDuration').textContent = `${duration} days`;
+                
+                const statusElement = document.getElementById('viewRouteStatus');
+                let statusHtml = '';
+                
+                switch(status) {
+                    case 'active':
+                        statusHtml = '<span class="badge bg-success">Active</span>';
+                        break;
+                    case 'inactive':
+                        statusHtml = '<span class="badge bg-secondary">Inactive</span>';
+                        break;
+                    case 'seasonal':
+                        statusHtml = '<span class="badge bg-info">Seasonal</span>';
+                        break;
+                    default:
+                        statusHtml = '<span class="badge bg-light text-dark">' + status + '</span>';
+                }
+                
+                statusElement.innerHTML = statusHtml;
+                
+                // Initialize map after modal is shown
+                viewRouteModal.addEventListener('shown.bs.modal', function() {
+                    if (viewMap) {
+                        viewMap.remove();
+                    }
+                    
+                    viewMap = L.map('viewRouteMap');
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(viewMap);
+                    
+                    // Add markers and polyline
+                    viewOriginMarker = L.marker([originLat, originLng]).addTo(viewMap)
+                        .bindPopup(`<strong>Origin:</strong> ${originName}`);
+                    
+                    viewDestinationMarker = L.marker([destLat, destLng]).addTo(viewMap)
+                        .bindPopup(`<strong>Destination:</strong> ${destName}`);
+                    
+                    viewRouteLine = L.polyline([[originLat, originLng], [destLat, destLng]], {
+                        color: 'blue',
+                        weight: 3,
+                        opacity: 0.7,
+                        dashArray: '10, 10'
+                    }).addTo(viewMap);
+                    
+                    // Fit map to markers
+                    const bounds = L.latLngBounds([
+                        [originLat, originLng],
+                        [destLat, destLng]
+                    ]);
+                    
+                    viewMap.fitBounds(bounds, {
+                        padding: [50, 50]
+                    });
+                    
+                    setTimeout(() => {
+                        viewMap.invalidateSize();
+                    }, 200);
+                }, { once: true });
+            });
+            
+            viewRouteModal.addEventListener('hidden.bs.modal', function () {
+                if (viewMap) {
+                    viewMap.remove();
+                    viewMap = null;
+                }
+            });
+        }
+        
+        // Edit Route Modal
+        const editRouteModal = document.getElementById('editRouteModal');
+        if (editRouteModal) {
+            editRouteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                const originId = button.getAttribute('data-origin-id');
+                const destId = button.getAttribute('data-destination-id');
+                const distance = button.getAttribute('data-distance');
+                const duration = button.getAttribute('data-duration');
+                const status = button.getAttribute('data-status');
+                
+                // Set form values
+                document.getElementById('editRouteId').value = id;
+                document.getElementById('editRouteName').value = name;
+                document.getElementById('editRouteOrigin').value = originId;
+                document.getElementById('editRouteDestination').value = destId;
+                document.getElementById('editRouteDistance').value = distance;
+                document.getElementById('editRouteDuration').value = duration;
+                document.getElementById('editRouteStatus').value = status;
+                
+                // Initialize map after modal is shown
+                editRouteModal.addEventListener('shown.bs.modal', function() {
+                    if (editMap) {
+                        editMap.remove();
+                    }
+                    
+                    editMap = L.map('editRouteMap');
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(editMap);
+                    
+                    updateEditMap();
+                    
+                    setTimeout(() => {
+                        editMap.invalidateSize();
+                    }, 200);
+                }, { once: true });
+                
+                // Handle origin change
+                const editRouteOrigin = document.getElementById('editRouteOrigin');
+                editRouteOrigin.addEventListener('change', updateEditMap);
+                
+                // Handle destination change
+                const editRouteDestination = document.getElementById('editRouteDestination');
+                editRouteDestination.addEventListener('change', updateEditMap);
+                
+                function updateEditMap() {
+                    if (!editMap) return;
+                    
+                    if (editOriginMarker) {
+                        editMap.removeLayer(editOriginMarker);
+                    }
+                    
+                    if (editDestinationMarker) {
+                        editMap.removeLayer(editDestinationMarker);
+                    }
+                    
+                    if (editRouteLine) {
+                        editMap.removeLayer(editRouteLine);
+                    }
+                    
+                    const originSelect = document.getElementById('editRouteOrigin');
+                    const destSelect = document.getElementById('editRouteDestination');
+                    
+                    if (originSelect.selectedIndex > -1 && destSelect.selectedIndex > -1) {
+                        const originOption = originSelect.options[originSelect.selectedIndex];
+                        const destOption = destSelect.options[destSelect.selectedIndex];
+                        
+                        const originLat = parseFloat(originOption.getAttribute('data-lat'));
+                        const originLng = parseFloat(originOption.getAttribute('data-lng'));
+                        const destLat = parseFloat(destOption.getAttribute('data-lat'));
+                        const destLng = parseFloat(destOption.getAttribute('data-lng'));
+                        
+                        if (!isNaN(originLat) && !isNaN(originLng)) {
+                            editOriginMarker = L.marker([originLat, originLng]).addTo(editMap)
+                                .bindPopup(`<strong>Origin:</strong> ${originOption.text}`);
+                        }
+                        
+                        if (!isNaN(destLat) && !isNaN(destLng)) {
+                            editDestinationMarker = L.marker([destLat, destLng]).addTo(editMap)
+                                .bindPopup(`<strong>Destination:</strong> ${destOption.text}`);
+                        }
+                        
+                        if (editOriginMarker && editDestinationMarker) {
+                            editRouteLine = L.polyline([
+                                [originLat, originLng],
+                                [destLat, destLng]
+                            ], {
+                                color: 'blue',
+                                weight: 3,
+                                opacity: 0.7,
+                                dashArray: '10, 10'
+                            }).addTo(editMap);
+                            
+                            // Fit map to markers
+                            const bounds = L.latLngBounds([
+                                [originLat, originLng],
+                                [destLat, destLng]
+                            ]);
+                            
+                            editMap.fitBounds(bounds, {
+                                padding: [50, 50]
+                            });
+                            
+                            // Calculate distance
+                            const originLatLng = editOriginMarker.getLatLng();
+                            const destLatLng = editDestinationMarker.getLatLng();
+                            
+                            // Approximate nautical miles calculation
+                            const distanceKm = originLatLng.distanceTo(destLatLng) / 1000;
+                            const distanceNM = distanceKm * 0.539957; // Convert km to nautical miles
+                            
+                            document.getElementById('editRouteDistance').value = distanceNM.toFixed(1);
+                            
+                            // Estimate duration (assuming average speed of 15 knots)
+                            const durationDays = distanceNM / (15 * 24);
+                            document.getElementById('editRouteDuration').value = durationDays.toFixed(1);
+                        }
+                    }
+                }
+            });
+            
+            editRouteModal.addEventListener('hidden.bs.modal', function () {
+                if (editMap) {
+                    editMap.remove();
+                    editMap = null;
+                }
+            });
+        }
+        
+        // Handle Delete Route Modal
+        const deleteRouteModal = document.getElementById('deleteRouteModal');
+        if (deleteRouteModal) {
+            deleteRouteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                
+                // Set modal content
+                document.getElementById('deleteRouteId').value = id;
+                document.getElementById('deleteRouteName').textContent = name;
+            });
+        }
+        
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    });
+</script>
+</body>
+</html>

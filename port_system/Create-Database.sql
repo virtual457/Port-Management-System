@@ -322,3 +322,63 @@ INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special
 (5, 'Automotive Parts', 'container', 8500.00, '20×8×8.5', 'OEM parts for assembly line.', 'booked'),
 (6, 'Wine Barrels', 'container', 4200.00, '20×8×8.5', 'Temperature controlled. Handle with care.', 'pending'),
 (6, 'Milk Products', 'liquid', 10000.00, '20×8×8.5', 'Refrigerated transport required.', 'booked');
+
+
+--tables for shipowner
+-- Table for ships
+CREATE TABLE ships (
+    ship_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    ship_type ENUM('container', 'bulk', 'tanker', 'roro') NOT NULL,
+    capacity DECIMAL(12, 2) NOT NULL,
+    current_port_id INT,
+    imo_number VARCHAR(20) NOT NULL UNIQUE,
+    flag VARCHAR(50) NOT NULL,
+    year_built INT NOT NULL,
+    status ENUM('active', 'maintenance', 'docked', 'in_transit', 'deleted') NOT NULL,
+    owner_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (current_port_id) REFERENCES ports(port_id),
+    FOREIGN KEY (owner_id) REFERENCES users(user_id)
+);
+
+-- Table for routes
+CREATE TABLE routes (
+    route_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    origin_port_id INT NOT NULL,
+    destination_port_id INT NOT NULL,
+    distance DECIMAL(10, 2) NOT NULL COMMENT 'Distance in nautical miles',
+    duration DECIMAL(6, 2) NOT NULL COMMENT 'Duration in days',
+    status ENUM('active', 'inactive', 'seasonal', 'deleted') NOT NULL,
+    owner_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id),
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id),
+    FOREIGN KEY (owner_id) REFERENCES users(user_id),
+    CONSTRAINT different_ports CHECK (origin_port_id != destination_port_id)
+);
+
+-- Table for voyage schedules
+CREATE TABLE schedules (
+    schedule_id INT AUTO_INCREMENT PRIMARY KEY,
+    ship_id INT NOT NULL,
+    route_id INT NOT NULL,
+    departure_date DATETIME NOT NULL,
+    arrival_date DATETIME NOT NULL,
+    status ENUM('scheduled', 'in_progress', 'completed', 'cancelled', 'delayed') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id),
+    FOREIGN KEY (route_id) REFERENCES routes(route_id),
+    CONSTRAINT valid_dates CHECK (arrival_date > departure_date)
+);
+
+-- Add 'shipowner' role to roles table
+INSERT INTO roles (role_name) VALUES ('shipowner');
+
+select * from user_roles where user_id = 1; -- Check roles assigned to Chandan (user_id = 1)
+
+select * from users;

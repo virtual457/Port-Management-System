@@ -144,12 +144,12 @@
                 <div class="col-md-2">
                     <select name="role" class="form-select">
                         <option value="">All Roles</option>
-                        <option value="admin" {% if request.GET.role == 'admin' %}selected{% endif %}>Admin</option>
-                        <option value="manager" {% if request.GET.role == 'manager' %}selected{% endif %}>Manager</option>
-                        <option value="staff" {% if request.GET.role == 'staff' %}selected{% endif %}>Staff</option>
-                        <option value="customer" {% if request.GET.role == 'customer' %}selected{% endif %}>Customer</option>
+                        {% for role in roles %}
+                            <option value="{{ role.name }}" {% if request.GET.role == role.name %}selected{% endif %}>{{ role.name|title }}</option>
+                        {% endfor %}
                     </select>
                 </div>
+            
                 <div class="col-md-2">
                     <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
                 </div>
@@ -297,10 +297,9 @@
                             <label for="createRole" class="form-label">Role</label>
                             <select class="form-select" id="createRole" name="role" required>
                                 <option value="" selected disabled>Select Role</option>
-                                <option value="admin">Admin</option>
-                                <option value="manager">Manager</option>
-                                <option value="staff">Staff</option>
-                                <option value="customer">Customer</option>
+                                {% for role in roles %}
+                                    <option value="{{ role.name }}">{{ role.name|title }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                     </div>
@@ -393,10 +392,9 @@
                     <div class="mb-3">
                         <label for="editRole" class="form-label">Role</label>
                         <select class="form-select" id="editRole" name="role" required>
-                            <option value="admin">Admin</option>
-                            <option value="manager">Manager</option>
-                            <option value="staff">Staff</option>
-                            <option value="customer">Customer</option>
+                            {% for role in roles %}
+                                <option value="{{ role.name }}">{{ role.name|title }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">

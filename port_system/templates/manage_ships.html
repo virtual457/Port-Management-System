@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Ships</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .ship-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Shipowner Menu</h5>
+    <hr class="bg-light">
+    <a href="/shipowner/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/shipowner/ships"><i class="bi bi-ship me-2"></i> Manage Ships</a>
+    <a href="/shipowner/routes"><i class="bi bi-signpost-split me-2"></i> Manage Routes</a>
+    <a href="/shipowner/schedules"><i class="bi bi-calendar-check me-2"></i> Schedules</a>
+    <a href="/shipowner/cargo-requests"><i class="bi bi-box-seam me-2"></i> Cargo Requests</a>
+    <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-ship me-2"></i> Shipowner Portal
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Captain" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="dashboard-card">
+        <h3 class="mb-4 text-center">Manage Ships</h3>
+
+        <!-- Filter and Create Ship Button -->
+        <form method="get" class="mb-3">
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <input type="text" name="name" value="{{ request.GET.name }}" class="form-control" placeholder="Filter by ship name">
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-select">
+                        <option value="">All Ship Types</option>
+                        <option value="container" {% if request.GET.type == 'container' %}selected{% endif %}>Container Ship</option>
+                        <option value="bulk" {% if request.GET.type == 'bulk' %}selected{% endif %}>Bulk Carrier</option>
+                        <option value="tanker" {% if request.GET.type == 'tanker' %}selected{% endif %}>Tanker</option>
+                        <option value="roro" {% if request.GET.type == 'roro' %}selected{% endif %}>Roll-on/Roll-off</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="maintenance" {% if request.GET.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
+                        <option value="docked" {% if request.GET.status == 'docked' %}selected{% endif %}>Docked</option>
+                        <option value="in_transit" {% if request.GET.status == 'in_transit' %}selected{% endif %}>In Transit</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#createShipModal">
+                        <i class="bi bi-plus-circle me-1"></i> Add Ship
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <hr class="my-4">
+
+        <!-- Messages/Alerts section -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Ships Table -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Ship Name</th>
+                        <th>Type</th>
+                        <th>Capacity</th>
+                        <th>Current Port</th>
+                        <th>Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ship in ships %}
+                        <tr>
+                            <td>{{ ship.name }}</td>
+                            <td>
+                                {% if ship.type == 'container' %}
+                                    <span class="badge bg-primary ship-badge">Container Ship</span>
+                                {% elif ship.type == 'bulk' %}
+                                    <span class="badge bg-secondary ship-badge">Bulk Carrier</span>
+                                {% elif ship.type == 'tanker' %}
+                                    <span class="badge bg-info ship-badge">Tanker</span>
+                                {% elif ship.type == 'roro' %}
+                                    <span class="badge bg-warning text-dark ship-badge">Roll-on/Roll-off</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark ship-badge">{{ ship.type|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ ship.capacity }} {% if ship.type == 'container' %}TEU{% elif ship.type == 'bulk' or ship.type == 'tanker' %}MT{% else %}units{% endif %}</td>
+                            <td>{{ ship.current_port|default:"At Sea" }}</td>
+                            <td>
+                                {% if ship.status == 'active' %}
+                                    <span class="badge bg-success ship-badge">Active</span>
+                                {% elif ship.status == 'maintenance' %}
+                                    <span class="badge bg-warning text-dark ship-badge">Maintenance</span>
+                                {% elif ship.status == 'docked' %}
+                                    <span class="badge bg-secondary ship-badge">Docked</span>
+                                {% elif ship.status == 'in_transit' %}
+                                    <span class="badge bg-info ship-badge">In Transit</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark ship-badge">{{ ship.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button type="button"
+                                    class="btn btn-outline-info btn-sm view-ship-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#viewShipModal"
+                                    data-id="{{ ship.id }}"
+                                    data-name="{{ ship.name }}"
+                                    data-type="{{ ship.type }}"
+                                    data-capacity="{{ ship.capacity }}"
+                                    data-current-port="{{ ship.current_port }}"
+                                    data-status="{{ ship.status }}"
+                                    data-year="{{ ship.year_built }}"
+                                    data-flag="{{ ship.flag }}"
+                                    data-imo="{{ ship.imo_number }}">
+                                    Details
+                                </button>
+                                <button type="button"
+                                    class="btn btn-outline-primary btn-sm edit-ship-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editShipModal"
+                                    data-id="{{ ship.id }}"
+                                    data-name="{{ ship.name }}"
+                                    data-type="{{ ship.type }}"
+                                    data-capacity="{{ ship.capacity }}"
+                                    data-current-port="{{ ship.current_port }}"
+                                    data-status="{{ ship.status }}"
+                                    data-year="{{ ship.year_built }}"
+                                    data-flag="{{ ship.flag }}"
+                                    data-imo="{{ ship.imo_number }}">
+                                    Edit
+                                </button>
+                                <button type="button"
+                                    class="btn btn-outline-danger btn-sm delete-ship-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#deleteShipModal"
+                                    data-id="{{ ship.id }}"
+                                    data-name="{{ ship.name }}">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No ships found. Your fleet is as empty as the Bermuda Triangle! 🚢</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="mt-4">
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if ships.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ ships.previous_page_number }}&name={{ request.GET.name }}&type={{ request.GET.type }}&status={{ request.GET.status }}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in ships.paginator.page_range %}
+                        <li class="page-item {% if ships.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page={{ num }}&name={{ request.GET.name }}&type={{ request.GET.type }}&status={{ request.GET.status }}">{{ num }}</a>
+                        </li>
+                    {% endfor %}
+
+                    {% if ships.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ ships.next_page_number }}&name={{ request.GET.name }}&type={{ request.GET.type }}&status={{ request.GET.status }}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Create Ship Modal -->
+<div class="modal fade" id="createShipModal" tabindex="-1" aria-labelledby="createShipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createShipModalLabel">Add New Ship</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createShipForm" method="post" action="/shipowner/ships/add/">
+                    {% csrf_token %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="createShipName" class="form-label">Ship Name</label>
+                            <input type="text" class="form-control" id="createShipName" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="createShipType" class="form-label">Ship Type</label>
+                            <select class="form-select" id="createShipType" name="type" required>
+                                <option value="" selected disabled>Select Ship Type</option>
+                                <option value="container">Container Ship</option>
+                                <option value="bulk">Bulk Carrier</option>
+                                <option value="tanker">Tanker</option>
+                                <option value="roro">Roll-on/Roll-off</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="createShipCapacity" class="form-label">Capacity</label>
+                            <input type="number" class="form-control" id="createShipCapacity" name="capacity" required>
+                            <div id="capacityUnitText" class="form-text">Capacity in TEU for container ships, Metric Tons for bulk/tanker, or units for Ro-Ro</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="createShipPort" class="form-label">Current Port</label>
+                            <select class="form-select" id="createShipPort" name="current_port">
+                                <option value="">At Sea</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="createShipIMO" class="form-label">IMO Number</label>
+                            <input type="text" class="form-control" id="createShipIMO" name="imo_number" placeholder="IMO1234567" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="createShipFlag" class="form-label">Flag Country</label>
+                            <input type="text" class="form-control" id="createShipFlag" name="flag" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="createShipYear" class="form-label">Year Built</label>
+                            <input type="number" class="form-control" id="createShipYear" name="year_built" min="1900" max="2025" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="createShipStatus" class="form-label">Status</label>
+                            <select class="form-select" id="createShipStatus" name="status" required>
+                                <option value="active">Active</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="docked">Docked</option>
+                                <option value="in_transit">In Transit</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="createShipForm" class="btn btn-success">Add Ship</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Ship Modal -->
+<div class="modal fade" id="viewShipModal" tabindex="-1" aria-labelledby="viewShipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewShipModalLabel">Ship Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Ship Name</h6>
+                        <p id="viewShipName"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Type</h6>
+                        <p id="viewShipType"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Capacity</h6>
+                        <p id="viewShipCapacity"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Current Port</h6>
+                        <p id="viewShipPort"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>IMO Number</h6>
+                        <p id="viewShipIMO"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Flag</h6>
+                        <p id="viewShipFlag"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Year Built</h6>
+                        <p id="viewShipYear"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Status</h6>
+                        <p id="viewShipStatus"></p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Last Updated</h6>
+                        <p id="viewShipLastUpdated">April 3, 2025</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Ship Modal -->
+<div class="modal fade" id="editShipModal" tabindex="-1" aria-labelledby="editShipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editShipModalLabel">Edit Ship</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editShipForm" method="post" action="/shipowner/ships/edit/">
+                    {% csrf_token %}
+                    <input type="hidden" id="editShipId" name="id">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editShipName" class="form-label">Ship Name</label>
+                            <input type="text" class="form-control" id="editShipName" name="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editShipType" class="form-label">Ship Type</label>
+                            <select class="form-select" id="editShipType" name="type" required>
+                                <option value="container">Container Ship</option>
+                                <option value="bulk">Bulk Carrier</option>
+                                <option value="tanker">Tanker</option>
+                                <option value="roro">Roll-on/Roll-off</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editShipCapacity" class="form-label">Capacity</label>
+                            <input type="number" class="form-control" id="editShipCapacity" name="capacity" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editShipPort" class="form-label">Current Port</label>
+                            <select class="form-select" id="editShipPort" name="current_port">
+                                <option value="">At Sea</option>
+                                {% for port in ports %}
+                                    <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editShipIMO" class="form-label">IMO Number</label>
+                            <input type="text" class="form-control" id="editShipIMO" name="imo_number" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editShipFlag" class="form-label">Flag Country</label>
+                            <input type="text" class="form-control" id="editShipFlag" name="flag" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editShipYear" class="form-label">Year Built</label>
+                            <input type="number" class="form-control" id="editShipYear" name="year_built" min="1900" max="2025" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editShipStatus" class="form-label">Status</label>
+                            <select class="form-select" id="editShipStatus" name="status" required>
+                                <option value="active">Active</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="docked">Docked</option>
+                                <option value="in_transit">In Transit</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="editShipForm" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Ship Modal -->
+<div class="modal fade" id="deleteShipModal" tabindex="-1" aria-labelledby="deleteShipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteShipModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the ship "<span id="deleteShipName"></span>"?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+                <form id="deleteShipForm" method="post" action="/shipowner/ships/delete/">
+                    {% csrf_token %}
+                    <input type="hidden" id="deleteShipId" name="id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteShipForm" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Modal functionality for ship management
+    document.addEventListener('DOMContentLoaded', function() {
+        // Update capacity unit text based on ship type selection
+        const shipTypeSelector = document.getElementById('createShipType');
+        const capacityUnitText = document.getElementById('capacityUnitText');
+        
+        if (shipTypeSelector && capacityUnitText) {
+            shipTypeSelector.addEventListener('change', function() {
+                const selectedType = this.value;
+                switch(selectedType) {
+                    case 'container':
+                        capacityUnitText.textContent = 'Capacity in TEU (Twenty-foot Equivalent Units)';
+                        break;
+                    case 'bulk':
+                    case 'tanker':
+                        capacityUnitText.textContent = 'Capacity in Metric Tons (MT)';
+                        break;
+                    case 'roro':
+                        capacityUnitText.textContent = 'Capacity in vehicle units';
+                        break;
+                    default:
+                        capacityUnitText.textContent = 'Capacity';
+                }
+            });
+        }
+
+        // Handle View Ship Modal
+        const viewShipModal = document.getElementById('viewShipModal');
+        if (viewShipModal) {
+            viewShipModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                const type = button.getAttribute('data-type');
+                const capacity = button.getAttribute('data-capacity');
+                const current_port = button.getAttribute('data-current-port');
+                const status = button.getAttribute('data-status');
+                const year = button.getAttribute('data-year');
+                const flag = button.getAttribute('data-flag');
+                const imo = button.getAttribute('data-imo');
+                
+                // Update modal content
+                document.getElementById('viewShipName').textContent = name;
+                
+                let typeDisplay = '';
+                switch(type) {
+                    case 'container':
+                        typeDisplay = '<span class="badge bg-primary">Container Ship</span>';
+                        break;
+                    case 'bulk':
+                        typeDisplay = '<span class="badge bg-secondary">Bulk Carrier</span>';
+                        break;
+                    case 'tanker':
+                        typeDisplay = '<span class="badge bg-info">Tanker</span>';
+                        break;
+                    case 'roro':
+                        typeDisplay = '<span class="badge bg-warning text-dark">Roll-on/Roll-off</span>';
+                        break;
+                    default:
+                        typeDisplay = type;
+                }
+                document.getElementById('viewShipType').innerHTML = typeDisplay;
+                
+                let capacityDisplay = capacity;
+                switch(type) {
+                    case 'container':
+                        capacityDisplay += ' TEU';
+                        break;
+                    case 'bulk':
+                    case 'tanker':
+                        capacityDisplay += ' MT';
+                        break;
+                    case 'roro':
+                        capacityDisplay += ' units';
+                        break;
+                }
+                document.getElementById('viewShipCapacity').textContent = capacityDisplay;
+                
+                document.getElementById('viewShipPort').textContent = current_port || 'At Sea';
+                document.getElementById('viewShipYear').textContent = year;
+                document.getElementById('viewShipFlag').textContent = flag;
+                document.getElementById('viewShipIMO').textContent = imo;
+                
+                const statusElement = document.getElementById('viewShipStatus');
+                let statusHtml = '';
+                
+                switch(status) {
+                    case 'active':
+                        statusHtml = '<span class="badge bg-success">Active</span>';
+                        break;
+                    case 'maintenance':
+                        statusHtml = '<span class="badge bg-warning text-dark">Maintenance</span>';
+                        break;
+                    case 'docked':
+                        statusHtml = '<span class="badge bg-secondary">Docked</span>';
+                        break;
+                    case 'in_transit':
+                        statusHtml = '<span class="badge bg-info">In Transit</span>';
+                        break;
+                    default:
+                        statusHtml = '<span class="badge bg-light text-dark">' + status + '</span>';
+                }
+                
+                statusElement.innerHTML = statusHtml;
+            });
+        }
+        
+        // Handle Edit Ship Modal
+        const editShipModal = document.getElementById('editShipModal');
+        if (editShipModal) {
+            editShipModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                const type = button.getAttribute('data-type');
+                const capacity = button.getAttribute('data-capacity');
+                const current_port = button.getAttribute('data-current-port');
+                const status = button.getAttribute('data-status');
+                const year = button.getAttribute('data-year');
+                const flag = button.getAttribute('data-flag');
+                const imo = button.getAttribute('data-imo');
+                
+                // Set form values
+                document.getElementById('editShipId').value = id;
+                document.getElementById('editShipName').value = name;
+                document.getElementById('editShipType').value = type;
+                document.getElementById('editShipCapacity').value = capacity;
+                document.getElementById('editShipPort').value = current_port || '';
+                document.getElementById('editShipStatus').value = status;
+                document.getElementById('editShipYear').value = year;
+                document.getElementById('editShipFlag').value = flag;
+                document.getElementById('editShipIMO').value = imo;
+            });
+        }
+        
+        // Handle Delete Ship Modal
+        const deleteShipModal = document.getElementById('deleteShipModal');
+        if (deleteShipModal) {
+            deleteShipModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const name = button.getAttribute('data-name');
+                
+                // Set modal content
+                document.getElementById('deleteShipId').value = id;
+                document.getElementById('deleteShipName').textContent = name;
+            });
+        }
+        
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    });
+</script>
+</body>
+</html>
