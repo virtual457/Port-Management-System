@@ -171,6 +171,186 @@ def admin_manage_users(request):
         'users': users_page
     })
 
+@role_required('admin')
+def admin_users_add(request):
+    """
+    View function for adding a new user.
+    Inserts user information into the database.
+    """
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        role = request.POST.get('role')
+        password = request.POST.get('password')
+        first_name = request.POST.get('first_name', '')
+        last_name = request.POST.get('last_name', '')
+        phone_number = request.POST.get('phone_number', '')
+        
+        if not (username and email and role and password):
+            messages.error(request, "Required fields are missing.")
+            return redirect('manage-users')
+        
+        # Hash the password
+        hashed_password = make_password(password)
+        
+        try:
+            with connection.cursor() as cursor:
+                # Check if email already exists
+                cursor.execute("SELECT user_id FROM users WHERE email = %s", [email])
+                if cursor.fetchone():
+                    messages.error(request, f"Email '{email}' is already in use.")
+                    return redirect('manage-users')
+                
+                # Insert user
+                cursor.execute("""
+                    INSERT INTO users (username, email, password, first_name, last_name, phone_number)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, [username, email, hashed_password, first_name, last_name, phone_number])
+                
+                # Get the user_id of the newly inserted user
+                user_id = cursor.lastrowid
+                
+                # Get role_id
+                cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
+                role_id_result = cursor.fetchone()
+                
+                if not role_id_result:
+                    # If role doesn't exist, create it (fallback, should rarely happen)
+                    cursor.execute("INSERT INTO roles (role_name) VALUES (%s)", [role])
+                    role_id = cursor.lastrowid
+                else:
+                    role_id = role_id_result[0]
+                
+                # Assign role to user
+                cursor.execute(
+                    "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
+                    [user_id, role_id]
+                )
+                
+            messages.success(request, f"User '{username}' added successfully!")
+        except Exception as e:
+            messages.error(request, f"Error adding user: {str(e)}")
+        
+        return redirect('manage-users')
+    
+    # If not POST, redirect back to manage users page
+    return redirect('manage-users')
+
+@role_required('admin')
+def admin_users_edit(request):
+    """
+    View function for editing a user.
+    Updates user information in the database.
+    """
+    if request.method == 'POST':
+        user_id = request.POST.get('id')
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        role = request.POST.get('role')
+        password = request.POST.get('password')
+        
+        if not (user_id and username and email and role):
+            messages.error(request, "Required fields are missing.")
+            return redirect('manage-users')
+        
+        try:
+            with connection.cursor() as cursor:
+                # Check if email already exists for another user
+                cursor.execute(
+                    "SELECT user_id FROM users WHERE email = %s AND user_id != %s", 
+                    [email, user_id]
+                )
+                if cursor.fetchone():
+                    messages.error(request, f"Email '{email}' is already in use by another user.")
+                    return redirect('manage-users')
+                
+                # Update user information
+                if password and password.strip():
+                    # If a new password is provided, hash it and update all fields
+                    hashed_password = make_password(password)
+                    cursor.execute(
+                        "UPDATE users SET username = %s, email = %s, password = %s WHERE user_id = %s",
+                        [username, email, hashed_password, user_id]
+                    )
+                else:
+                    # Otherwise, update only username and email
+                    cursor.execute(
+                        "UPDATE users SET username = %s, email = %s WHERE user_id = %s",
+                        [username, email, user_id]
+                    )
+                
+                # Update user role (first get the role_id)
+                cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
+                role_id_result = cursor.fetchone()
+                
+                if not role_id_result:
+                    messages.error(request, f"Invalid role: {role}")
+                    return redirect('manage-users')
+                
+                role_id = role_id_result[0]
+                
+                # Delete existing roles for this user and add the new one
+                cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
+                cursor.execute(
+                    "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
+                    [user_id, role_id]
+                )
+                
+            messages.success(request, f"User '{username}' updated successfully!")
+        except Exception as e:
+            messages.error(request, f"Error updating user: {str(e)}")
+        
+        return redirect('manage-users')
+    
+    # If not POST, redirect back to manage users page
+    return redirect('manage-users')
+
+@role_required('admin')
+def admin_users_delete(request):
+    """
+    View function for deleting a user.
+    Removes user from the database.
+    """
+    if request.method == 'POST':
+        user_id = request.POST.get('id')
+        
+        if not user_id:
+            messages.error(request, "No user specified.")
+            return redirect('manage-users')
+        
+        # Get username for success message
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+            result = cursor.fetchone()
+            username = result[0] if result else "Unknown user"
+        
+        # Don't allow deletion of the current user
+        if int(user_id) == int(request.session.get('user_id', 0)):
+            messages.error(request, "You cannot delete your own account.")
+            return redirect('manage-users')
+        
+        try:
+            with connection.cursor() as cursor:
+                # Check if user has any associated data before deletion
+                # This would be more comprehensive in a real application
+                # checking all related tables
+                
+                # First delete from user_roles
+                cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
+                
+                # Then delete the user
+                cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id])
+                
+            messages.success(request, f"User '{username}' deleted successfully!")
+        except Exception as e:
+            messages.error(request, f"Error deleting user: {str(e)}")
+        
+        return redirect('manage-users')
+    
+    # If not POST, redirect back to manage users page
+    return redirect('manage-users')
+# Admin port management views
+
 
 @role_required('admin')
 def admin_manage_ports(request):

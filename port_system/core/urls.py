@@ -22,6 +22,11 @@ urlpatterns = [
     #admin port related paths
     path('admin/ports/edit/', views.admin_ports_edit, name='edit-ports'),
     path('admin/ports/delete/', views.admin_ports_delete, name='delete-ports'),
+
+    # Admin user management paths
+    path('admin/users/edit/', views.admin_users_edit, name='edit-users'),
+    path('admin/users/delete/', views.admin_users_delete, name='delete-users'),
+    path('admin/users/add/', views.admin_users_add, name='add-users'),
     
 
     # Dashboards (each view checks for correct role)
