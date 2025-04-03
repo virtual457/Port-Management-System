@@ -242,6 +242,74 @@ def admin_ports_add(request):
 
     return render(request, 'add_ports.html')
 
+@role_required('admin')
+def admin_ports_edit(request):
+    if request.method == 'POST':
+        port_id = request.POST.get('id')
+        name = request.POST.get('name')
+        country = request.POST.get('country')
+        status = request.POST.get('status')
+        location = request.POST.get('location')
+        
+        if not (port_id and name and country and status and location):
+            messages.error(request, "All fields are required.")
+            return redirect('manage-ports')
+        
+        # Parse location
+        lat, lng = location.split(',')
+        location_point = f"POINT({lng} {lat})"  # Note: lng first, then lat (MySQL syntax)
+        
+        # Update port in database
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE ports 
+                SET name = %s, country = %s, location = ST_GeomFromText(%s), status = %s
+                WHERE port_id = %s
+            """, [name, country, location_point, status, port_id])
+        
+        messages.success(request, f"Port '{name}' updated successfully!")
+        return redirect('manage-ports')
+    
+    # If not POST, redirect back to manage ports page
+    return redirect('manage-ports')
+
+@role_required('admin')
+def admin_ports_delete(request):
+    if request.method == 'POST':
+        port_id = request.POST.get('id')
+        
+        if not port_id:
+            messages.error(request, "No port specified.")
+            return redirect('manage-ports')
+        
+        # Get port name for success message
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT name FROM ports WHERE port_id = %s", [port_id])
+            result = cursor.fetchone()
+            port_name = result[0] if result else "Unknown port"
+        
+        # Delete port from database
+        try:
+            with connection.cursor() as cursor:
+                # You might want to check if port is in use before deletion
+                cursor.execute("SELECT COUNT(*) FROM schedules WHERE port_id = %s", [port_id])
+                count = cursor.fetchone()[0]
+                
+                if count > 0:
+                    messages.error(request, f"Cannot delete '{port_name}'. It is used in {count} schedule(s).")
+                    return redirect('manage-ports')
+                
+                cursor.execute("DELETE FROM ports WHERE port_id = %s", [port_id])
+                
+            messages.success(request, f"Port '{port_name}' deleted successfully!")
+        except Exception as e:
+            messages.error(request, f"Error deleting port: {str(e)}")
+        
+        return redirect('manage-ports')
+    
+    # If not POST, redirect back to manage ports page
+    return redirect('manage-ports')
+
 
 #Customer specific view to cargo
 from django.shortcuts import render, redirect

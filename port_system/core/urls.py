@@ -18,6 +18,10 @@ urlpatterns = [
     path('customer/cargo/add/', views.customer_add_cargo, name='customer-add-cargo'),
     path('customer/cargo/edit/', views.customer_edit_cargo, name='customer-edit-cargo'),
     path('customer/cargo/delete/', views.customer_delete_cargo, name='customer-delete-cargo'),
+
+    #admin port related paths
+    path('admin/ports/edit/', views.admin_ports_edit, name='edit-ports'),
+    path('admin/ports/delete/', views.admin_ports_delete, name='delete-ports'),
     
 
     # Dashboards (each view checks for correct role)
