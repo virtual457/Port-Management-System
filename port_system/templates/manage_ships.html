@@ -146,7 +146,7 @@
                     <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
                 </div>
                 <div class="col-md-2">
-                    <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#createShipModal">
+                    <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#addShipModal">
                         <i class="bi bi-plus-circle me-1"></i> Add Ship
                     </button>
                 </div>
@@ -175,6 +175,7 @@
                         <th>Capacity</th>
                         <th>Current Port</th>
                         <th>Status</th>
+                        <th>Cost per kg</th>
                         <th class="text-center">Actions</th>
                     </tr>
                 </thead>
@@ -210,6 +211,7 @@
                                     <span class="badge bg-light text-dark ship-badge">{{ ship.status|title }}</span>
                                 {% endif %}
                             </td>
+                            <td>${{ ship.cost_per_kg|default:"0.00" }}</td>
                             <td class="text-center">
                                 <button type="button"
                                     class="btn btn-outline-info btn-sm view-ship-btn"
@@ -230,15 +232,7 @@
                                     class="btn btn-outline-primary btn-sm edit-ship-btn"
                                     data-bs-toggle="modal"
                                     data-bs-target="#editShipModal"
-                                    data-id="{{ ship.id }}"
-                                    data-name="{{ ship.name }}"
-                                    data-type="{{ ship.type }}"
-                                    data-capacity="{{ ship.capacity }}"
-                                    data-current-port="{{ ship.current_port }}"
-                                    data-status="{{ ship.status }}"
-                                    data-year="{{ ship.year_built }}"
-                                    data-flag="{{ ship.flag }}"
-                                    data-imo="{{ ship.imo_number }}">
+                                    data-ship-id="{{ ship.id }}">
                                     Edit
                                 </button>
                                 <button type="button"
@@ -253,7 +247,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center text-muted">No ships found. Your fleet is as empty as the Bermuda Triangle! 🚢</td>
+                            <td colspan="7" class="text-center text-muted">No ships found. Your fleet is as empty as the Bermuda Triangle! 🚢</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -287,79 +281,111 @@
     </div>
 </div>
 
-<!-- Create Ship Modal -->
-<div class="modal fade" id="createShipModal" tabindex="-1" aria-labelledby="createShipModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+<!-- Add Ship Modal -->
+<div class="modal fade" id="addShipModal" tabindex="-1" aria-labelledby="addShipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="createShipModalLabel">Add New Ship</h5>
+                <h5 class="modal-title" id="addShipModalLabel">Add New Ship</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="createShipForm" method="post" action="/shipowner/ships/add/">
+                <form action="{% url 'add-ship' %}" method="post">
                     {% csrf_token %}
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="createShipName" class="form-label">Ship Name</label>
-                            <input type="text" class="form-control" id="createShipName" name="name" required>
+                            <label for="name" class="form-label">Ship Name*</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="createShipType" class="form-label">Ship Type</label>
-                            <select class="form-select" id="createShipType" name="type" required>
-                                <option value="" selected disabled>Select Ship Type</option>
+                            <label for="type" class="form-label">Ship Type*</label>
+                            <select class="form-select" id="type" name="type" required>
+                                <option value="" selected disabled>Select type</option>
                                 <option value="container">Container Ship</option>
                                 <option value="bulk">Bulk Carrier</option>
                                 <option value="tanker">Tanker</option>
-                                <option value="roro">Roll-on/Roll-off</option>
+                                <option value="roro">Ro-Ro</option>
                             </select>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="createShipCapacity" class="form-label">Capacity</label>
-                            <input type="number" class="form-control" id="createShipCapacity" name="capacity" required>
-                            <div id="capacityUnitText" class="form-text">Capacity in TEU for container ships, Metric Tons for bulk/tanker, or units for Ro-Ro</div>
+                            <label for="capacity" class="form-label">Capacity (tons)*</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="capacity" name="capacity" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="createShipPort" class="form-label">Current Port</label>
-                            <select class="form-select" id="createShipPort" name="current_port">
-                                <option value="">At Sea</option>
+                            <label for="current_port" class="form-label">Current Port</label>
+                            <select class="form-select" id="current_port" name="current_port">
+                                <option value="" selected>At Sea / Not Specified</option>
                                 {% for port in ports %}
-                                    <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="createShipIMO" class="form-label">IMO Number</label>
-                            <input type="text" class="form-control" id="createShipIMO" name="imo_number" placeholder="IMO1234567" required>
+                        <div class="col-md-4">
+                            <label for="imo_number" class="form-label">IMO Number*</label>
+                            <input type="text" class="form-control" id="imo_number" name="imo_number" required>
                         </div>
-                        <div class="col-md-6">
-                            <label for="createShipFlag" class="form-label">Flag Country</label>
-                            <input type="text" class="form-control" id="createShipFlag" name="flag" required>
+                        <div class="col-md-4">
+                            <label for="flag" class="form-label">Flag*</label>
+                            <input type="text" class="form-control" id="flag" name="flag" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="year_built" class="form-label">Year Built*</label>
+                            <input type="number" min="1900" max="2100" class="form-control" id="year_built" name="year_built" required>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="createShipYear" class="form-label">Year Built</label>
-                            <input type="number" class="form-control" id="createShipYear" name="year_built" min="1900" max="2025" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="createShipStatus" class="form-label">Status</label>
-                            <select class="form-select" id="createShipStatus" name="status" required>
-                                <option value="active">Active</option>
+                        <div class="col-md-4">
+                            <label for="status" class="form-label">Status*</label>
+                            <select class="form-select" id="status" name="status" required>
+                                <option value="active" selected>Active</option>
                                 <option value="maintenance">Maintenance</option>
                                 <option value="docked">Docked</option>
                                 <option value="in_transit">In Transit</option>
                             </select>
                         </div>
+                        <div class="col-md-4">
+                            <label for="cost_per_kg" class="form-label">Cost per kg ($)</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="cost_per_kg" name="cost_per_kg" value="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6>Default Route (Optional)</h6>
+                            <p class="text-muted small">If specified, a default route will be created for this ship.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="from_port" class="form-label">From Port</label>
+                            <select class="form-select" id="from_port" name="from_port">
+                                <option value="" selected>Select Origin Port</option>
+                                {% for port in ports %}
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="to_port" class="form-label">To Port</label>
+                            <select class="form-select" id="to_port" name="to_port">
+                                <option value="" selected>Select Destination Port</option>
+                                {% for port in ports %}
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Ship</button>
                     </div>
                 </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="createShipForm" class="btn btn-success">Add Ship</button>
             </div>
         </div>
     </div>
@@ -430,76 +456,109 @@
 
 <!-- Edit Ship Modal -->
 <div class="modal fade" id="editShipModal" tabindex="-1" aria-labelledby="editShipModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editShipModalLabel">Edit Ship</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="editShipForm" method="post" action="/shipowner/ships/edit/">
+                <form action="{% url 'edit-ship' %}" method="post">
                     {% csrf_token %}
-                    <input type="hidden" id="editShipId" name="id">
+                    <input type="hidden" id="edit_id" name="id">
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="editShipName" class="form-label">Ship Name</label>
-                            <input type="text" class="form-control" id="editShipName" name="name" required>
+                            <label for="edit_name" class="form-label">Ship Name*</label>
+                            <input type="text" class="form-control" id="edit_name" name="name" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="editShipType" class="form-label">Ship Type</label>
-                            <select class="form-select" id="editShipType" name="type" required>
+                            <label for="edit_type" class="form-label">Ship Type*</label>
+                            <select class="form-select" id="edit_type" name="type" required>
                                 <option value="container">Container Ship</option>
                                 <option value="bulk">Bulk Carrier</option>
                                 <option value="tanker">Tanker</option>
-                                <option value="roro">Roll-on/Roll-off</option>
+                                <option value="roro">Ro-Ro</option>
                             </select>
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="editShipCapacity" class="form-label">Capacity</label>
-                            <input type="number" class="form-control" id="editShipCapacity" name="capacity" required>
+                            <label for="edit_capacity" class="form-label">Capacity (tons)*</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="edit_capacity" name="capacity" required>
                         </div>
                         <div class="col-md-6">
-                            <label for="editShipPort" class="form-label">Current Port</label>
-                            <select class="form-select" id="editShipPort" name="current_port">
-                                <option value="">At Sea</option>
+                            <label for="edit_current_port" class="form-label">Current Port</label>
+                            <select class="form-select" id="edit_current_port" name="current_port">
+                                <option value="">At Sea / Not Specified</option>
                                 {% for port in ports %}
-                                    <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="editShipIMO" class="form-label">IMO Number</label>
-                            <input type="text" class="form-control" id="editShipIMO" name="imo_number" required>
+                        <div class="col-md-4">
+                            <label for="edit_imo_number" class="form-label">IMO Number*</label>
+                            <input type="text" class="form-control" id="edit_imo_number" name="imo_number" required>
                         </div>
-                        <div class="col-md-6">
-                            <label for="editShipFlag" class="form-label">Flag Country</label>
-                            <input type="text" class="form-control" id="editShipFlag" name="flag" required>
+                        <div class="col-md-4">
+                            <label for="edit_flag" class="form-label">Flag*</label>
+                            <input type="text" class="form-control" id="edit_flag" name="flag" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="edit_year_built" class="form-label">Year Built*</label>
+                            <input type="number" min="1900" max="2100" class="form-control" id="edit_year_built" name="year_built" required>
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="editShipYear" class="form-label">Year Built</label>
-                            <input type="number" class="form-control" id="editShipYear" name="year_built" min="1900" max="2025" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="editShipStatus" class="form-label">Status</label>
-                            <select class="form-select" id="editShipStatus" name="status" required>
+                        <div class="col-md-4">
+                            <label for="edit_status" class="form-label">Status*</label>
+                            <select class="form-select" id="edit_status" name="status" required>
                                 <option value="active">Active</option>
                                 <option value="maintenance">Maintenance</option>
                                 <option value="docked">Docked</option>
                                 <option value="in_transit">In Transit</option>
                             </select>
                         </div>
+                        <div class="col-md-4">
+                            <label for="edit_cost_per_kg" class="form-label">Cost per kg ($)</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="edit_cost_per_kg" name="cost_per_kg" value="0.00">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6>Ship Route (Optional)</h6>
+                            <p class="text-muted small">Update the route for this ship.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_from_port" class="form-label">From Port</label>
+                            <select class="form-select" id="edit_from_port" name="from_port">
+                                <option value="">Select Origin Port</option>
+                                {% for port in ports %}
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_to_port" class="form-label">To Port</label>
+                            <select class="form-select" id="edit_to_port" name="to_port">
+                                <option value="">Select Destination Port</option>
+                                {% for port in ports %}
+                                <option value="{{ port.id }}">{{ port.name }}, {{ port.country }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
                     </div>
                 </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="editShipForm" class="btn btn-primary">Save Changes</button>
             </div>
         </div>
     </div>
@@ -655,36 +714,6 @@
             });
         }
         
-        // Handle Edit Ship Modal
-        const editShipModal = document.getElementById('editShipModal');
-        if (editShipModal) {
-            editShipModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                
-                // Extract data from button attributes
-                const id = button.getAttribute('data-id');
-                const name = button.getAttribute('data-name');
-                const type = button.getAttribute('data-type');
-                const capacity = button.getAttribute('data-capacity');
-                const current_port = button.getAttribute('data-current-port');
-                const status = button.getAttribute('data-status');
-                const year = button.getAttribute('data-year');
-                const flag = button.getAttribute('data-flag');
-                const imo = button.getAttribute('data-imo');
-                
-                // Set form values
-                document.getElementById('editShipId').value = id;
-                document.getElementById('editShipName').value = name;
-                document.getElementById('editShipType').value = type;
-                document.getElementById('editShipCapacity').value = capacity;
-                document.getElementById('editShipPort').value = current_port || '';
-                document.getElementById('editShipStatus').value = status;
-                document.getElementById('editShipYear').value = year;
-                document.getElementById('editShipFlag').value = flag;
-                document.getElementById('editShipIMO').value = imo;
-            });
-        }
-        
         // Handle Delete Ship Modal
         const deleteShipModal = document.getElementById('deleteShipModal');
         if (deleteShipModal) {
@@ -709,7 +738,50 @@
                 bsAlert.close();
             });
         }, 5000);
+        
+        // Function to populate the edit ship modal
+        function populateEditShipModal(shipId) {
+            // Make an AJAX request to get ship data
+            fetch(`/api/ships/${shipId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    // Populate the form fields
+                    document.getElementById('edit_id').value = data.id;
+                    document.getElementById('edit_name').value = data.name;
+                    document.getElementById('edit_type').value = data.type;
+                    document.getElementById('edit_capacity').value = data.capacity;
+                    document.getElementById('edit_current_port').value = data.current_port_id || '';
+                    document.getElementById('edit_imo_number').value = data.imo_number;
+                    document.getElementById('edit_flag').value = data.flag;
+                    document.getElementById('edit_year_built').value = data.year_built;
+                    document.getElementById('edit_status').value = data.status;
+                    document.getElementById('edit_cost_per_kg').value = data.cost_per_kg || '0.00';
+                    
+                    // If route data exists, populate those fields
+                    if (data.route) {
+                        document.getElementById('edit_from_port').value = data.route.origin_port_id;
+                        document.getElementById('edit_to_port').value = data.route.destination_port_id;
+                    } else {
+                        document.getElementById('edit_from_port').value = '';
+                        document.getElementById('edit_to_port').value = '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching ship data:', error);
+                    alert('Error loading ship data. Please try again.');
+                });
+        }
+
+        // Attach click event to edit buttons
+        const editButtons = document.querySelectorAll('.edit-ship-btn');
+        editButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const shipId = this.getAttribute('data-ship-id');
+                populateEditShipModal(shipId);
+            });
+        });
     });
 </script>
+
 </body>
 </html>

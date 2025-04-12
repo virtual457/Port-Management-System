@@ -1,8 +1,12 @@
 
+import json
 from django.shortcuts import render, redirect
 from django.db import connection
 from django.core.paginator import Paginator
 from django.contrib import messages
+from django.http import JsonResponse
+from django.db import connection
+
 from .views import role_required  # Import the role_required decorator from your main views
 
 # Utility to check if user is a shipowner
@@ -51,10 +55,13 @@ def manage_ships(request):
     # Get all ships owned by the shipowner
     query = """
         SELECT s.ship_id, s.name, s.ship_type, s.capacity, 
-               COALESCE(p.name, 'At Sea') as current_port, s.status,
-               s.year_built, s.flag, s.imo_number
+               COALESCE(p.name, 'At Sea') as current_port, p.port_id as current_port_id, 
+               s.status, s.year_built, s.flag, s.imo_number,
+               COALESCE(r.cost_per_kg, 0.00) as cost_per_kg,
+               r.route_id, r.origin_port_id, r.destination_port_id
         FROM ships s
         LEFT JOIN ports p ON s.current_port_id = p.port_id
+        LEFT JOIN routes r ON s.ship_id = r.ship_id AND r.status != 'deleted'
         WHERE s.owner_id = %s
           AND s.status != 'deleted'
           AND (%s IS NULL OR s.name LIKE CONCAT('%%', %s, '%%'))
@@ -74,20 +81,31 @@ def manage_ships(request):
         username = cursor.fetchone()[0]
     
     # Transform raw data to dictionary list
-    ships_list = [
-        {
+    ships_list = []
+    for row in ships_raw:
+        ship_dict = {
             'id': row[0],
             'name': row[1],
             'type': row[2],
             'capacity': row[3],
             'current_port': row[4],
-            'status': row[5],
-            'year_built': row[6],
-            'flag': row[7],
-            'imo_number': row[8]
+            'current_port_id': row[5],
+            'status': row[6],
+            'year_built': row[7],
+            'flag': row[8],
+            'imo_number': row[9],
+            'cost_per_kg': row[10]
         }
-        for row in ships_raw
-    ]
+        
+        # Add route information if available
+        if row[11]:  # If route_id is not None
+            ship_dict['route'] = {
+                'id': row[11],
+                'origin_port_id': row[12],
+                'destination_port_id': row[13]
+            }
+        
+        ships_list.append(ship_dict)
     
     # Apply pagination
     paginator = Paginator(ships_list, 5)  # Show 5 ships per page
@@ -136,6 +154,9 @@ def add_ship(request):
         flag = request.POST.get('flag')
         year_built = request.POST.get('year_built')
         status = request.POST.get('status')
+        cost_per_kg = request.POST.get('cost_per_kg') or 0.00
+        from_port = request.POST.get('from_port') or None
+        to_port = request.POST.get('to_port') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -160,7 +181,60 @@ def add_ship(request):
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, [name, ship_type, capacity, current_port, imo_number, flag, year_built, status, user_id])
                 
+                ship_id = cursor.lastrowid
+                
+                # If both from_port and to_port are provided, create a route for this ship
+                if from_port and to_port and from_port != to_port:
+                    # Calculate approximate distance and duration based on ports
+                    # This is a simplified version - in a real app, you might use a more complex algorithm
+                    
+                    # First, get the coordinates for both ports
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat1, ST_X(location) AS lng1 FROM ports WHERE port_id = %s
+                    """, [from_port])
+                    origin_coords = cursor.fetchone()
+                    
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat2, ST_X(location) AS lng2 FROM ports WHERE port_id = %s
+                    """, [to_port])
+                    dest_coords = cursor.fetchone()
+                    
+                    if origin_coords and dest_coords:
+                        # Simple distance calculation (very approximate)
+                        # In a real app, you would use a proper geospatial calculation
+                        from math import radians, cos, sin, sqrt, atan2
+                        
+                        lat1, lng1 = radians(origin_coords[0]), radians(origin_coords[1])
+                        lat2, lng2 = radians(dest_coords[0]), radians(dest_coords[1])
+                        
+                        # Haversine formula
+                        dlon = lng2 - lng1
+                        dlat = lat2 - lat1
+                        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        # Earth radius in nautical miles
+                        radius = 3440.065  
+                        distance = radius * c
+                        
+                        # Approximate duration (assuming average speed of 20 knots)
+                        duration = distance / 20 / 24  # in days
+                        
+                        # Create a default route name
+                        route_name = f"Route for {name}"
+                        
+                        # Insert route with the ship_id and cost_per_kg
+                        cursor.execute("""
+                            INSERT INTO routes (
+                                name, origin_port_id, destination_port_id, 
+                                distance, duration, status, owner_id, ship_id, cost_per_kg
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, [route_name, from_port, to_port, distance, duration, 'active', user_id, ship_id, cost_per_kg])
+                    
             messages.success(request, f"Ship '{name}' added successfully!")
+            # Add additional message if route was created
+            if from_port and to_port and from_port != to_port:
+                messages.success(request, f"Default route created for ship '{name}'.")
+                
         except Exception as e:
             messages.error(request, f"Error adding ship: {str(e)}")
         
@@ -185,6 +259,9 @@ def edit_ship(request):
         flag = request.POST.get('flag')
         year_built = request.POST.get('year_built')
         status = request.POST.get('status')
+        cost_per_kg = request.POST.get('cost_per_kg') or 0.00
+        from_port = request.POST.get('from_port') or None
+        to_port = request.POST.get('to_port') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -219,7 +296,105 @@ def edit_ship(request):
                     WHERE ship_id = %s AND owner_id = %s
                 """, [name, ship_type, capacity, current_port, imo_number, flag, year_built, status, ship_id, user_id])
                 
+                # Check if ship has an existing route
+                cursor.execute("SELECT route_id FROM routes WHERE ship_id = %s", [ship_id])
+                existing_route = cursor.fetchone()
+                
+                if existing_route and from_port and to_port and from_port != to_port:
+                    # Update existing route
+                    route_id = existing_route[0]
+                    
+                    # Calculate new distance and duration based on ports
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat1, ST_X(location) AS lng1 FROM ports WHERE port_id = %s
+                    """, [from_port])
+                    origin_coords = cursor.fetchone()
+                    
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat2, ST_X(location) AS lng2 FROM ports WHERE port_id = %s
+                    """, [to_port])
+                    dest_coords = cursor.fetchone()
+                    
+                    if origin_coords and dest_coords:
+                        # Simple distance calculation (very approximate)
+                        from math import radians, cos, sin, sqrt, atan2
+                        
+                        lat1, lng1 = radians(origin_coords[0]), radians(origin_coords[1])
+                        lat2, lng2 = radians(dest_coords[0]), radians(dest_coords[1])
+                        
+                        # Haversine formula
+                        dlon = lng2 - lng1
+                        dlat = lat2 - lat1
+                        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        # Earth radius in nautical miles
+                        radius = 3440.065  
+                        distance = radius * c
+                        
+                        # Approximate duration (assuming average speed of 20 knots)
+                        duration = distance / 20 / 24  # in days
+                        
+                        # Update route
+                        cursor.execute("""
+                            UPDATE routes SET 
+                                origin_port_id = %s, destination_port_id = %s,
+                                distance = %s, duration = %s, cost_per_kg = %s
+                            WHERE route_id = %s
+                        """, [from_port, to_port, distance, duration, cost_per_kg, route_id])
+                        
+                elif not existing_route and from_port and to_port and from_port != to_port:
+                    # Create new route
+                    # Similar to add_ship logic for creating a route
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat1, ST_X(location) AS lng1 FROM ports WHERE port_id = %s
+                    """, [from_port])
+                    origin_coords = cursor.fetchone()
+                    
+                    cursor.execute("""
+                        SELECT ST_Y(location) AS lat2, ST_X(location) AS lng2 FROM ports WHERE port_id = %s
+                    """, [to_port])
+                    dest_coords = cursor.fetchone()
+                    
+                    if origin_coords and dest_coords:
+                        from math import radians, cos, sin, sqrt, atan2
+                        
+                        lat1, lng1 = radians(origin_coords[0]), radians(origin_coords[1])
+                        lat2, lng2 = radians(dest_coords[0]), radians(dest_coords[1])
+                        
+                        dlon = lng2 - lng1
+                        dlat = lat2 - lat1
+                        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        radius = 3440.065
+                        distance = radius * c
+                        
+                        duration = distance / 20 / 24
+                        
+                        route_name = f"Route for {name}"
+                        
+                        cursor.execute("""
+                            INSERT INTO routes (
+                                name, origin_port_id, destination_port_id, 
+                                distance, duration, status, owner_id, ship_id, cost_per_kg
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, [route_name, from_port, to_port, distance, duration, 'active', user_id, ship_id, cost_per_kg])
+                
+                # If existing route but no from/to port provided, update just the cost_per_kg
+                elif existing_route:
+                    route_id = existing_route[0]
+                    cursor.execute("""
+                        UPDATE routes SET cost_per_kg = %s WHERE route_id = %s
+                    """, [cost_per_kg, route_id])
+                
             messages.success(request, f"Ship '{name}' updated successfully!")
+            
+            # Add additional message if route was created or updated
+            if from_port and to_port and from_port != to_port:
+                if existing_route:
+                    messages.success(request, "Route updated successfully.")
+                else:
+                    messages.success(request, "New route created successfully.")
+                    
         except Exception as e:
             messages.error(request, f"Error updating ship: {str(e)}")
         
@@ -515,3 +690,72 @@ def delete_route(request):
     
     # If not POST, redirect back to manage routes page
     return redirect('manage-routes')
+
+from django.http import JsonResponse
+from django.db import connection
+import json
+
+@shipowner_required
+def get_ship_details(request, ship_id):
+    """
+    API view to get ship details including route information.
+    Returns JSON data for the specified ship.
+    """
+    user_id = request.session.get('user_id')
+    
+    with connection.cursor() as cursor:
+        # Check ownership of the ship
+        cursor.execute("""
+            SELECT s.ship_id, s.name, s.ship_type, s.capacity, 
+                   s.current_port_id, s.imo_number, s.flag, 
+                   s.year_built, s.status, s.owner_id
+            FROM ships s
+            WHERE s.ship_id = %s AND s.owner_id = %s
+        """, [ship_id, user_id])
+        
+        ship_row = cursor.fetchone()
+        
+        if not ship_row:
+            return JsonResponse({'error': 'Ship not found or access denied'}, status=404)
+        
+        # Get route information for this ship
+        cursor.execute("""
+            SELECT r.route_id, r.name, r.origin_port_id, r.destination_port_id, 
+                   r.distance, r.duration, r.cost_per_kg
+            FROM routes r
+            WHERE r.ship_id = %s AND r.status != 'deleted'
+        """, [ship_id])
+        
+        route_row = cursor.fetchone()
+    
+    # Create ship data dictionary
+    ship_data = {
+        'id': ship_row[0],
+        'name': ship_row[1],
+        'type': ship_row[2],
+        'capacity': float(ship_row[3]),
+        'current_port_id': ship_row[4],
+        'imo_number': ship_row[5],
+        'flag': ship_row[6],
+        'year_built': ship_row[7],
+        'status': ship_row[8]
+    }
+    
+    # Add route data if it exists
+    if route_row:
+        ship_data['route'] = {
+            'id': route_row[0],
+            'name': route_row[1],
+            'origin_port_id': route_row[2],
+            'destination_port_id': route_row[3],
+            'distance': float(route_row[4]),
+            'duration': float(route_row[5]),
+            'cost_per_kg': float(route_row[6])
+        }
+        
+        # Add the cost_per_kg to the main ship data as well for the form
+        ship_data['cost_per_kg'] = float(route_row[6])
+    else:
+        ship_data['cost_per_kg'] = 0.00
+    
+    return JsonResponse(ship_data)
