@@ -178,17 +178,21 @@
                             <td>{{ user.username }}</td>
                             <td>{{ user.email }}</td>
                             <td>
-                                {% if user.role == 'admin' %}
-                                    <span class="badge bg-danger role-badge">Admin</span>
-                                {% elif user.role == 'manager' %}
-                                    <span class="badge bg-primary role-badge">Manager</span>
-                                {% elif user.role == 'staff' %}
-                                    <span class="badge bg-info role-badge">Staff</span>
-                                {% elif user.role == 'customer' %}
-                                    <span class="badge bg-success role-badge">Customer</span>
-                                {% else %}
-                                    <span class="badge bg-secondary role-badge">{{ user.role|title }}</span>
-                                {% endif %}
+                                {% for role_name in user.role_list %}
+                                    {% if role_name == 'admin' %}
+                                        <span class="badge bg-danger role-badge">Admin</span>
+                                    {% elif role_name == 'manager' %}
+                                        <span class="badge bg-primary role-badge">Manager</span>
+                                    {% elif role_name == 'staff' %}
+                                        <span class="badge bg-info role-badge">Staff</span>
+                                    {% elif role_name == 'customer' %}
+                                        <span class="badge bg-success role-badge">Customer</span>
+                                    {% elif role_name == 'shipowner' %}
+                                        <span class="badge bg-warning role-badge">Shipowner</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary role-badge">{{ role_name|title }}</span>
+                                    {% endif %}
+                                {% endfor %}
                             </td>
                             <td class="text-center">
                                 <button type="button"
@@ -350,8 +354,8 @@
                         <p id="viewEmail"></p>
                     </div>
                     <div class="col-md-4">
-                        <h6>Role</h6>
-                        <p id="viewRole"></p>
+                        <h6>Roles</h6>
+                        <div id="viewRoles"></div>
                     </div>
                 </div>
                 <!-- Additional user information could be added here -->
@@ -390,12 +394,18 @@
                         <input type="email" class="form-control" id="editEmail" name="email" required>
                     </div>
                     <div class="mb-3">
-                        <label for="editRole" class="form-label">Role</label>
-                        <select class="form-select" id="editRole" name="role" required>
+                        <label class="form-label">Roles</label>
+                        <div class="role-checkboxes">
                             {% for role in roles %}
-                                <option value="{{ role.name }}">{{ role.name|title }}</option>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="roles[]" 
+                                           id="role{{ role.id }}" value="{{ role.name }}">
+                                    <label class="form-check-label" for="role{{ role.id }}">
+                                        {{ role.name|title }}
+                                    </label>
+                                </div>
                             {% endfor %}
-                        </select>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="editPassword" class="form-label">New Password (leave blank to keep current)</label>
@@ -499,67 +509,96 @@
         }
         
         // Handle View User Modal
-        const viewUserModal = document.getElementById('viewUserModal');
-        if (viewUserModal) {
-            viewUserModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                
-                // Extract data from button attributes
-                const id = button.getAttribute('data-id');
-                const username = button.getAttribute('data-username');
-                const email = button.getAttribute('data-email');
-                const role = button.getAttribute('data-role');
-                
-                // Update modal content
-                document.getElementById('viewId').textContent = id;
-                document.getElementById('viewUsername').textContent = username;
-                document.getElementById('viewEmail').textContent = email;
-                
-                const roleElement = document.getElementById('viewRole');
-                let roleHtml = '';
-                
-                switch(role) {
-                    case 'admin':
-                        roleHtml = '<span class="badge bg-danger">Admin</span>';
-                        break;
-                    case 'manager':
-                        roleHtml = '<span class="badge bg-primary">Manager</span>';
-                        break;
-                    case 'staff':
-                        roleHtml = '<span class="badge bg-info">Staff</span>';
-                        break;
-                    case 'customer':
-                        roleHtml = '<span class="badge bg-success">Customer</span>';
-                        break;
-                    default:
-                        roleHtml = '<span class="badge bg-secondary">' + role.charAt(0).toUpperCase() + role.slice(1) + '</span>';
-                }
-                
-                roleElement.innerHTML = roleHtml;
-            });
-        }
+        // Handle View User Modal
+const viewUserModal = document.getElementById('viewUserModal');
+if (viewUserModal) {
+    viewUserModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
         
+        // Extract data from button attributes
+        const id = button.getAttribute('data-id');
+        const username = button.getAttribute('data-username');
+        const email = button.getAttribute('data-email');
+        const roleString = button.getAttribute('data-role');
+        const roles = roleString.split(', ');
+        
+        // Update modal content
+        document.getElementById('viewId').textContent = id;
+        document.getElementById('viewUsername').textContent = username;
+        document.getElementById('viewEmail').textContent = email;
+        
+        // Clear previous roles
+        const rolesElement = document.getElementById('viewRoles');
+        rolesElement.innerHTML = '';
+        
+        // Add each role with appropriate badge
+        roles.forEach(role => {
+            let badgeClass = '';
+            
+            switch(role.trim()) {
+                case 'admin':
+                    badgeClass = 'bg-danger';
+                    break;
+                case 'manager':
+                    badgeClass = 'bg-primary';
+                    break;
+                case 'staff':
+                    badgeClass = 'bg-info';
+                    break;
+                case 'customer':
+                    badgeClass = 'bg-success';
+                    break;
+                case 'shipowner':
+                    badgeClass = 'bg-warning';
+                    break;
+                default:
+                    badgeClass = 'bg-secondary';
+            }
+            
+            const roleBadge = document.createElement('span');
+            roleBadge.className = `badge ${badgeClass} role-badge me-1`;
+            roleBadge.textContent = role.trim().charAt(0).toUpperCase() + role.trim().slice(1);
+            rolesElement.appendChild(roleBadge);
+            
+            // Add a line break for better spacing between roles
+            rolesElement.appendChild(document.createElement('br'));
+        });
+    });
+}
+
         // Handle Edit User Modal
-        const editUserModal = document.getElementById('editUserModal');
-        if (editUserModal) {
-            editUserModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                
-                // Extract data from button attributes
-                const id = button.getAttribute('data-id');
-                const username = button.getAttribute('data-username');
-                const email = button.getAttribute('data-email');
-                const role = button.getAttribute('data-role');
-                
-                // Set form values
-                document.getElementById('editUserId').value = id;
-                document.getElementById('editUsername').value = username;
-                document.getElementById('editEmail').value = email;
-                document.getElementById('editRole').value = role;
-                document.getElementById('editPassword').value = ''; // Clear password field
-            });
-        }
+const editUserModal = document.getElementById('editUserModal');
+if (editUserModal) {
+    editUserModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
         
+        // Extract data from button attributes
+        const id = button.getAttribute('data-id');
+        const username = button.getAttribute('data-username');
+        const email = button.getAttribute('data-email');
+        const roleString = button.getAttribute('data-role');
+        const roles = roleString.split(', ');
+        
+        // Set form values
+        document.getElementById('editUserId').value = id;
+        document.getElementById('editUsername').value = username;
+        document.getElementById('editEmail').value = email;
+        document.getElementById('editPassword').value = ''; // Clear password field
+        
+        // Check the appropriate role checkboxes
+        document.querySelectorAll('input[name="roles[]"]').forEach(checkbox => {
+            // Uncheck all checkboxes first
+            checkbox.checked = false;
+            
+            // Check the ones that match user's roles
+            if (roles.some(role => role.trim() === checkbox.value)) {
+                checkbox.checked = true;
+            }
+        });
+    });
+}
+        
+
         // Handle Delete User Modal
         const deleteUserModal = document.getElementById('deleteUserModal');
         if (deleteUserModal) {
