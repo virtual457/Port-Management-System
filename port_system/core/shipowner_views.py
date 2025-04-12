@@ -1,8 +1,11 @@
-
+import json
 from django.shortcuts import render, redirect
 from django.db import connection
 from django.core.paginator import Paginator
 from django.contrib import messages
+from django.http import JsonResponse
+from django.db import connection
+
 from .views import role_required  # Import the role_required decorator from your main views
 
 # Utility to check if user is a shipowner
@@ -51,10 +54,12 @@ def manage_ships(request):
     # Get all ships owned by the shipowner
     query = """
         SELECT s.ship_id, s.name, s.ship_type, s.capacity, 
-               COALESCE(p.name, 'At Sea') as current_port, s.status,
-               s.year_built, s.flag, s.imo_number
+               COALESCE(p.name, 'At Sea') as current_port, p.port_id as current_port_id, 
+               s.status, s.year_built, s.flag, s.imo_number,
+               r.route_id, r.origin_port_id, r.destination_port_id
         FROM ships s
         LEFT JOIN ports p ON s.current_port_id = p.port_id
+        LEFT JOIN routes r ON s.ship_id = r.ship_id AND r.status != 'deleted'
         WHERE s.owner_id = %s
           AND s.status != 'deleted'
           AND (%s IS NULL OR s.name LIKE CONCAT('%%', %s, '%%'))
@@ -74,20 +79,30 @@ def manage_ships(request):
         username = cursor.fetchone()[0]
     
     # Transform raw data to dictionary list
-    ships_list = [
-        {
+    ships_list = []
+    for row in ships_raw:
+        ship_dict = {
             'id': row[0],
             'name': row[1],
             'type': row[2],
             'capacity': row[3],
             'current_port': row[4],
-            'status': row[5],
-            'year_built': row[6],
-            'flag': row[7],
-            'imo_number': row[8]
+            'current_port_id': row[5],
+            'status': row[6],
+            'year_built': row[7],
+            'flag': row[8],
+            'imo_number': row[9]
         }
-        for row in ships_raw
-    ]
+        
+        # Add route information if available
+        if row[10]:  # If route_id is not None
+            ship_dict['route'] = {
+                'id': row[10],
+                'origin_port_id': row[11],
+                'destination_port_id': row[12]
+            }
+        
+        ships_list.append(ship_dict)
     
     # Apply pagination
     paginator = Paginator(ships_list, 5)  # Show 5 ships per page
@@ -161,6 +176,7 @@ def add_ship(request):
                 """, [name, ship_type, capacity, current_port, imo_number, flag, year_built, status, user_id])
                 
             messages.success(request, f"Ship '{name}' added successfully!")
+                
         except Exception as e:
             messages.error(request, f"Error adding ship: {str(e)}")
         
@@ -220,6 +236,7 @@ def edit_ship(request):
                 """, [name, ship_type, capacity, current_port, imo_number, flag, year_built, status, ship_id, user_id])
                 
             messages.success(request, f"Ship '{name}' updated successfully!")
+                    
         except Exception as e:
             messages.error(request, f"Error updating ship: {str(e)}")
         
@@ -296,7 +313,7 @@ def manage_routes(request):
         SELECT r.route_id, r.name, 
                op.name as origin_port, op.port_id as origin_id, ST_Y(op.location) as origin_lat, ST_X(op.location) as origin_lng,
                dp.name as destination_port, dp.port_id as destination_id, ST_Y(dp.location) as destination_lat, ST_X(dp.location) as destination_lng,
-               r.distance, r.duration, r.status
+               r.distance, r.duration, r.status, r.cost_per_kg, r.ship_id
         FROM routes r
         JOIN ports op ON r.origin_port_id = op.port_id
         JOIN ports dp ON r.destination_port_id = dp.port_id
@@ -326,6 +343,15 @@ def manage_routes(request):
             ORDER BY name
         """)
         ports_raw = cursor.fetchall()
+        
+        # Get all ships for the route forms
+        cursor.execute("""
+            SELECT ship_id, name
+            FROM ships
+            WHERE owner_id = %s AND status != 'deleted'
+            ORDER BY name
+        """, [user_id])
+        ships_raw = cursor.fetchall()
     
     # Transform raw data to dictionary list
     routes_list = [
@@ -342,7 +368,9 @@ def manage_routes(request):
             'destination_lng': row[9],
             'distance': row[10],
             'duration': row[11],
-            'status': row[12]
+            'status': row[12],
+            'cost_per_kg': row[13],
+            'ship_id': row[14]
         }
         for row in routes_raw
     ]
@@ -358,6 +386,14 @@ def manage_routes(request):
         for row in ports_raw
     ]
     
+    ships_list = [
+        {
+            'id': row[0],
+            'name': row[1]
+        }
+        for row in ships_raw
+    ]
+    
     # Apply pagination
     paginator = Paginator(routes_list, 5)  # Show 5 routes per page
     routes_page = paginator.get_page(page_number)
@@ -365,6 +401,7 @@ def manage_routes(request):
     context = {
         'routes': routes_page,
         'ports': ports_list,
+        'ships': ships_list,
         'username': username
     }
     
@@ -383,6 +420,8 @@ def add_route(request):
         distance = request.POST.get('distance')
         duration = request.POST.get('duration')
         status = request.POST.get('status')
+        cost_per_kg = request.POST.get('cost_per_kg') or 0.00
+        ship_id = request.POST.get('ship_id') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -398,13 +437,20 @@ def add_route(request):
         
         try:
             with connection.cursor() as cursor:
+                # Check if ship belongs to user if ship_id is provided
+                if ship_id:
+                    cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
+                    if cursor.fetchone()[0] == 0:
+                        messages.error(request, "The selected ship does not belong to you.")
+                        return redirect('manage-routes')
+                
                 # Insert route
                 cursor.execute("""
                     INSERT INTO routes (
                         name, origin_port_id, destination_port_id, 
-                        distance, duration, status, owner_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, [name, origin_port, destination_port, distance, duration, status, user_id])
+                        distance, duration, status, owner_id, cost_per_kg, ship_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, [name, origin_port, destination_port, distance, duration, status, user_id, cost_per_kg, ship_id])
                 
             messages.success(request, f"Route '{name}' added successfully!")
         except Exception as e:
@@ -429,6 +475,8 @@ def edit_route(request):
         distance = request.POST.get('distance')
         duration = request.POST.get('duration')
         status = request.POST.get('status')
+        cost_per_kg = request.POST.get('cost_per_kg') or 0.00
+        ship_id = request.POST.get('ship_id') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -451,13 +499,20 @@ def edit_route(request):
                     messages.error(request, "You do not have permission to edit this route.")
                     return redirect('manage-routes')
                 
+                # Check if ship belongs to user if ship_id is provided
+                if ship_id:
+                    cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
+                    if cursor.fetchone()[0] == 0:
+                        messages.error(request, "The selected ship does not belong to you.")
+                        return redirect('manage-routes')
+                
                 # Update route
                 cursor.execute("""
                     UPDATE routes SET 
                         name = %s, origin_port_id = %s, destination_port_id = %s,
-                        distance = %s, duration = %s, status = %s
+                        distance = %s, duration = %s, status = %s, cost_per_kg = %s, ship_id = %s
                     WHERE route_id = %s AND owner_id = %s
-                """, [name, origin_port, destination_port, distance, duration, status, route_id, user_id])
+                """, [name, origin_port, destination_port, distance, duration, status, cost_per_kg, ship_id, route_id, user_id])
                 
             messages.success(request, f"Route '{name}' updated successfully!")
         except Exception as e:
@@ -515,3 +570,67 @@ def delete_route(request):
     
     # If not POST, redirect back to manage routes page
     return redirect('manage-routes')
+
+from django.http import JsonResponse
+from django.db import connection
+import json
+
+@shipowner_required
+def get_ship_details(request, ship_id):
+    """
+    API view to get ship details including route information.
+    Returns JSON data for the specified ship.
+    """
+    user_id = request.session.get('user_id')
+    
+    with connection.cursor() as cursor:
+        # Check ownership of the ship
+        cursor.execute("""
+            SELECT s.ship_id, s.name, s.ship_type, s.capacity, 
+                   s.current_port_id, s.imo_number, s.flag, 
+                   s.year_built, s.status, s.owner_id
+            FROM ships s
+            WHERE s.ship_id = %s AND s.owner_id = %s
+        """, [ship_id, user_id])
+        
+        ship_row = cursor.fetchone()
+        
+        if not ship_row:
+            return JsonResponse({'error': 'Ship not found or access denied'}, status=404)
+        
+        # Get route information for this ship
+        cursor.execute("""
+            SELECT r.route_id, r.name, r.origin_port_id, r.destination_port_id, 
+                   r.distance, r.duration, r.cost_per_kg
+            FROM routes r
+            WHERE r.ship_id = %s AND r.status != 'deleted'
+        """, [ship_id])
+        
+        route_row = cursor.fetchone()
+    
+    # Create ship data dictionary
+    ship_data = {
+        'id': ship_row[0],
+        'name': ship_row[1],
+        'type': ship_row[2],
+        'capacity': float(ship_row[3]),
+        'current_port_id': ship_row[4],
+        'imo_number': ship_row[5],
+        'flag': ship_row[6],
+        'year_built': ship_row[7],
+        'status': ship_row[8]
+    }
+    
+    # Add route data if it exists
+    if route_row:
+        ship_data['route'] = {
+            'id': route_row[0],
+            'name': route_row[1],
+            'origin_port_id': route_row[2],
+            'destination_port_id': route_row[3],
+            'distance': float(route_row[4]),
+            'duration': float(route_row[5]),
+            'cost_per_kg': float(route_row[6])
+        }
+    
+    return JsonResponse(ship_data)

@@ -175,6 +175,7 @@
                         <th>Destination</th>
                         <th>Distance (NM)</th>
                         <th>Duration</th>
+                        <th>Cost/kg</th>
                         <th>Status</th>
                         <th class="text-center">Actions</th>
                     </tr>
@@ -187,6 +188,7 @@
                             <td>{{ route.destination_port }}</td>
                             <td>{{ route.distance }}</td>
                             <td>{{ route.duration }} days</td>
+                            <td>${{ route.cost_per_kg|default:"0.00" }}</td>
                             <td>
                                 {% if route.status == 'active' %}
                                     <span class="badge bg-success route-badge">Active</span>
@@ -215,7 +217,10 @@
                                     data-destination-lng="{{ route.destination_lng }}"
                                     data-distance="{{ route.distance }}"
                                     data-duration="{{ route.duration }}"
-                                    data-status="{{ route.status }}">
+                                    data-status="{{ route.status }}"
+                                    data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}"
+                                    data-ship-id="{{ route.ship_id }}"
+                                    data-ship-name="{{ route.ship_name|default:'None' }}">
                                     Details
                                 </button>
                                 <button type="button"
@@ -228,7 +233,9 @@
                                     data-destination-id="{{ route.destination_id }}"
                                     data-distance="{{ route.distance }}"
                                     data-duration="{{ route.duration }}"
-                                    data-status="{{ route.status }}">
+                                    data-status="{{ route.status }}"
+                                    data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}"
+                                    data-ship-id="{{ route.ship_id }}">
                                     Edit
                                 </button>
                                 <button type="button"
@@ -243,7 +250,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted">No routes found. Chart a course and establish your first shipping route! 🧭</td>
+                            <td colspan="8" class="text-center text-muted">No routes found. Chart a course and establish your first shipping route! 🧭</td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -316,20 +323,35 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="createRouteDistance" class="form-label">Distance (Nautical Miles)</label>
                             <input type="number" step="0.1" min="0" class="form-control" id="createRouteDistance" name="distance" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="createRouteDuration" class="form-label">Duration (Days)</label>
                             <input type="number" step="0.1" min="0" class="form-control" id="createRouteDuration" name="duration" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="createRouteStatus" class="form-label">Status</label>
                             <select class="form-select" id="createRouteStatus" name="status" required>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
                                 <option value="seasonal">Seasonal</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="createRouteCostPerKg" class="form-label">Cost per kg ($)</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="createRouteCostPerKg" name="cost_per_kg" value="0.00">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="createRouteShip" class="form-label">Assign Ship (Optional)</label>
+                            <select class="form-select" id="createRouteShip" name="ship_id">
+                                <option value="" selected>Select Ship</option>
+                                {% for ship in ships %}
+                                    <option value="{{ ship.id }}">{{ ship.name }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                     </div>
@@ -370,17 +392,27 @@
                     </div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h6>Distance</h6>
                         <p id="viewRouteDistance"></p>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h6>Duration</h6>
                         <p id="viewRouteDuration"></p>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h6>Status</h6>
                         <p id="viewRouteStatus"></p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Cost per kg</h6>
+                        <p id="viewRouteCostPerKg"></p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6>Assigned Ship</h6>
+                        <p id="viewRouteShip">None</p>
                     </div>
                 </div>
             </div>
@@ -431,20 +463,35 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="editRouteDistance" class="form-label">Distance (Nautical Miles)</label>
                             <input type="number" step="0.1" min="0" class="form-control" id="editRouteDistance" name="distance" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="editRouteDuration" class="form-label">Duration (Days)</label>
                             <input type="number" step="0.1" min="0" class="form-control" id="editRouteDuration" name="duration" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label for="editRouteStatus" class="form-label">Status</label>
                             <select class="form-select" id="editRouteStatus" name="status" required>
                                 <option value="active">Active</option>
                                 <option value="inactive">Inactive</option>
                                 <option value="seasonal">Seasonal</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="editRouteCostPerKg" class="form-label">Cost per kg ($)</label>
+                            <input type="number" step="0.01" min="0" class="form-control" id="editRouteCostPerKg" name="cost_per_kg" value="0.00">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="editRouteShip" class="form-label">Assign Ship (Optional)</label>
+                            <select class="form-select" id="editRouteShip" name="ship_id">
+                                <option value="">Select Ship</option>
+                                {% for ship in ships %}
+                                    <option value="{{ ship.id }}">{{ ship.name }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                     </div>
@@ -633,6 +680,8 @@
                 const distance = button.getAttribute('data-distance');
                 const duration = button.getAttribute('data-duration');
                 const status = button.getAttribute('data-status');
+                const costPerKg = button.getAttribute('data-cost-per-kg') || '0.00';
+                const shipName = button.getAttribute('data-ship-name') || 'None';
                 
                 // Update modal content
                 document.getElementById('viewRouteName').textContent = name;
@@ -640,6 +689,8 @@
                 document.getElementById('viewRouteDestination').textContent = destName;
                 document.getElementById('viewRouteDistance').textContent = `${distance} Nautical Miles`;
                 document.getElementById('viewRouteDuration').textContent = `${duration} days`;
+                document.getElementById('viewRouteCostPerKg').textContent = `$${costPerKg}`;
+                document.getElementById('viewRouteShip').textContent = shipName;
                 
                 const statusElement = document.getElementById('viewRouteStatus');
                 let statusHtml = '';
@@ -723,6 +774,8 @@
                 const distance = button.getAttribute('data-distance');
                 const duration = button.getAttribute('data-duration');
                 const status = button.getAttribute('data-status');
+                const costPerKg = button.getAttribute('data-cost-per-kg') || '0.00';
+                const shipId = button.getAttribute('data-ship-id') || '';
                 
                 // Set form values
                 document.getElementById('editRouteId').value = id;
@@ -732,6 +785,8 @@
                 document.getElementById('editRouteDistance').value = distance;
                 document.getElementById('editRouteDuration').value = duration;
                 document.getElementById('editRouteStatus').value = status;
+                document.getElementById('editRouteCostPerKg').value = costPerKg;
+                document.getElementById('editRouteShip').value = shipId;
                 
                 // Initialize map after modal is shown
                 editRouteModal.addEventListener('shown.bs.modal', function() {
