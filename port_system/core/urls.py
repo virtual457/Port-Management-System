@@ -39,22 +39,20 @@ urlpatterns = [
     path('admin/manage-ports/', views.admin_manage_ports, name='manage-ports'), 
     path('admin/ports/add/', views.admin_ports_add, name='add-ports'),
 
-    # Add these URL patterns to your urlpatterns list in urls.py
-
 # Shipowner dashboard
-path('shipowner/dashboard/', shipowner_views.shipowner_dashboard, name='shipowner-dashboard'),
+    path('shipowner/dashboard/', shipowner_views.shipowner_dashboard, name='shipowner-dashboard'),
 
 # Ships management
-path('shipowner/ships/', shipowner_views.manage_ships, name='manage-ships'),
-path('shipowner/ships/add/', shipowner_views.add_ship, name='add-ship'),
-path('shipowner/ships/edit/', shipowner_views.edit_ship, name='edit-ship'),
-path('shipowner/ships/delete/', shipowner_views.delete_ship, name='delete-ship'),
+    path('shipowner/ships/', shipowner_views.manage_ships, name='manage-ships'),
+    path('shipowner/ships/add/', shipowner_views.add_ship, name='add-ship'),
+    path('shipowner/ships/edit/', shipowner_views.edit_ship, name='edit-ship'),
+    path('shipowner/ships/delete/', shipowner_views.delete_ship, name='delete-ship'),
 
-# Routes management
-path('shipowner/routes/', shipowner_views.manage_routes, name='manage-routes'),
-path('shipowner/routes/add/', shipowner_views.add_route, name='add-route'),
-path('shipowner/routes/edit/', shipowner_views.edit_route, name='edit-route'),
-path('shipowner/routes/delete/', shipowner_views.delete_route, name='delete-route'),
+    # Routes management
+    path('shipowner/routes/', shipowner_views.manage_routes, name='manage-routes'),
+    path('shipowner/routes/add/', shipowner_views.add_route, name='add-route'),
+    path('shipowner/routes/edit/', shipowner_views.edit_route, name='edit-route'),
+    path('shipowner/routes/delete/', shipowner_views.delete_route, name='delete-route'),
 
     
 ]
