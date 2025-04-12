@@ -387,6 +387,8 @@ CREATE TABLE schedules (
     route_id INT NOT NULL,
     departure_date DATETIME NOT NULL,
     arrival_date DATETIME NOT NULL,
+    actual_departure DATETIME,
+    actual_arrival DATETIME,
     status ENUM('scheduled', 'in_progress', 'completed', 'cancelled', 'delayed') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
