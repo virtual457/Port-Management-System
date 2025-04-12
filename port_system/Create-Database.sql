@@ -61,22 +61,36 @@ END//
 DELIMITER ;
 
 DELIMITER //
-CREATE PROCEDURE filter_users_advanced (
+
+DROP PROCEDURE IF EXISTS filter_users_advanced //
+
+CREATE PROCEDURE filter_users_advanced(
     IN username_filter VARCHAR(100),
     IN email_filter VARCHAR(100),
     IN role_filter VARCHAR(50)
 )
 BEGIN
-    SELECT u.user_id, u.username, u.email, r.role_name
-    FROM users u
-    JOIN user_roles ur ON u.user_id = ur.user_id
-    JOIN roles r ON ur.role_id = r.role_id
+    SELECT 
+        u.user_id, 
+        u.username, 
+        u.email, 
+        GROUP_CONCAT(r.role_name SEPARATOR ', ') as role_name
+    FROM 
+        users u
+    JOIN 
+        user_roles ur ON u.user_id = ur.user_id
+    JOIN 
+        roles r ON ur.role_id = r.role_id
     WHERE 
         (username_filter IS NULL OR u.username LIKE CONCAT('%', username_filter, '%')) AND
         (email_filter IS NULL OR u.email LIKE CONCAT('%', email_filter, '%')) AND
         (role_filter IS NULL OR r.role_name = role_filter)
-    ORDER BY u.created_at DESC;
+    GROUP BY 
+        u.user_id, u.username, u.email
+    ORDER BY 
+        u.created_at DESC;
 END//
+
 DELIMITER ;
 
 -- Ports table

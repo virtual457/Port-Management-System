@@ -157,11 +157,17 @@ def admin_manage_users(request):
         cursor.callproc('filter_users_advanced', [username, email, role])
         users_raw = cursor.fetchall()
 
-    # Prepare user list
-    users_list = [
-        {'user_id': row[0], 'username': row[1], 'email': row[2], 'role': row[3]}
-        for row in users_raw
-    ]
+    # Prepare user list with role split into a list
+    users_list = []
+    for row in users_raw:
+        role_list = row[3].split(', ') if row[3] else []
+        users_list.append({
+            'user_id': row[0], 
+            'username': row[1], 
+            'email': row[2], 
+            'role': row[3],  # Keep the original role string
+            'role_list': role_list  # Add the split list
+        })
 
     # Apply pagination in Python
     paginator = Paginator(users_list, 5)  # Show 5 users per page
@@ -182,7 +188,7 @@ def admin_manage_users(request):
 
     return render(request, 'manage_users.html', {
         'users': users_page,
-        'roles': roles_list,  # Pass the roles list to the template
+        'roles': roles_list,
     })
 
 @role_required('admin')
@@ -256,19 +262,19 @@ def admin_users_add(request):
 
 @role_required('admin')
 def admin_users_edit(request):
-    """
-    View function for editing a user.
-    Updates user information in the database.
-    """
     if request.method == 'POST':
         user_id = request.POST.get('id')
         username = request.POST.get('username')
         email = request.POST.get('email')
-        role = request.POST.get('role')
+        roles = request.POST.getlist('roles[]')  # Get all selected roles
         password = request.POST.get('password')
         
-        if not (user_id and username and email and role):
-            messages.error(request, "Required fields are missing.")
+        if not (user_id and username and email):
+            messages.error(request, "Username and email are required.")
+            return redirect('manage-users')
+        
+        if not roles:
+            messages.error(request, "At least one role must be selected.")
             return redirect('manage-users')
         
         try:
@@ -297,22 +303,20 @@ def admin_users_edit(request):
                         [username, email, user_id]
                     )
                 
-                # Update user role (first get the role_id)
-                cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
-                role_id_result = cursor.fetchone()
-                
-                if not role_id_result:
-                    messages.error(request, f"Invalid role: {role}")
-                    return redirect('manage-users')
-                
-                role_id = role_id_result[0]
-                
-                # Delete existing roles for this user and add the new one
+                # Delete existing roles for this user
                 cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
-                cursor.execute(
-                    "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
-                    [user_id, role_id]
-                )
+                
+                # Add each selected role
+                for role in roles:
+                    cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
+                    role_id_result = cursor.fetchone()
+                    
+                    if role_id_result:
+                        role_id = role_id_result[0]
+                        cursor.execute(
+                            "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
+                            [user_id, role_id]
+                        )
                 
             messages.success(request, f"User '{username}' updated successfully!")
         except Exception as e:
