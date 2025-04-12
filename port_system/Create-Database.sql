@@ -3,6 +3,16 @@ DROP DATABASE IF EXISTS port;
 CREATE DATABASE port;
 USE port;
 
+-- Drop existing procedures and functions if they exist
+DROP PROCEDURE IF EXISTS add_new_user;
+DROP PROCEDURE IF EXISTS filter_users_advanced;
+DROP PROCEDURE IF EXISTS get_customer_cargo;
+DROP PROCEDURE IF EXISTS add_customer_cargo;
+DROP PROCEDURE IF EXISTS update_customer_cargo;
+DROP PROCEDURE IF EXISTS delete_customer_cargo;
+DROP FUNCTION IF EXISTS get_full_name;
+DROP FUNCTION IF EXISTS get_username;
+
 -- Users table
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -21,7 +31,7 @@ CREATE TABLE roles (
     role_name VARCHAR(50) NOT NULL UNIQUE
 );
 
-INSERT INTO roles (role_name) VALUES ('admin'), ('manager'), ('staff'), ('customer');
+INSERT INTO roles (role_name) VALUES ('admin'), ('manager'), ('staff'), ('customer'), ('shipowner');
 
 -- User-Roles (many-to-many)
 CREATE TABLE user_roles (
@@ -32,6 +42,7 @@ CREATE TABLE user_roles (
     FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE
 );
 
+DELIMITER //
 CREATE FUNCTION get_full_name(uid INT)
 RETURNS VARCHAR(100)
 DETERMINISTIC
@@ -39,16 +50,17 @@ BEGIN
     DECLARE full_name VARCHAR(100);
     SELECT CONCAT(first_name, ' ', last_name) INTO full_name FROM users WHERE user_id = uid;
     RETURN full_name;
-END;
+END//
+DELIMITER ;
 
-
+DELIMITER //
 CREATE PROCEDURE add_new_user(IN uname VARCHAR(50), IN email VARCHAR(100))
 BEGIN
     INSERT INTO users (username, email, password) VALUES (uname, email, 'default123');
-END;
+END//
+DELIMITER ;
 
-DELIMITER $$
-
+DELIMITER //
 CREATE PROCEDURE filter_users_advanced (
     IN username_filter VARCHAR(100),
     IN email_filter VARCHAR(100),
@@ -64,13 +76,11 @@ BEGIN
         (email_filter IS NULL OR u.email LIKE CONCAT('%', email_filter, '%')) AND
         (role_filter IS NULL OR r.role_name = role_filter)
     ORDER BY u.created_at DESC;
-END$$
-
+END//
 DELIMITER ;
 
 -- Ports table
-
-drop table if exists ports;
+DROP TABLE IF EXISTS ports;
 CREATE TABLE ports (
     port_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -96,7 +106,7 @@ BEGIN
     WHERE u.user_id = p_user_id;
     
     RETURN username;
-END //
+END//
 DELIMITER ;
 
 -- Stored procedure to get filtered cargo for a customer
@@ -123,7 +133,7 @@ BEGIN
       AND (p_cargo_type IS NULL OR cargo_type = p_cargo_type)
       AND (p_status IS NULL OR status = p_status)
     ORDER BY created_at DESC;
-END //
+END//
 DELIMITER ;
 
 -- Stored procedure to add new cargo
@@ -157,7 +167,7 @@ BEGIN
     
     -- Return the ID of the newly created cargo
     SELECT LAST_INSERT_ID() AS cargo_id;
-END //
+END//
 DELIMITER ;
 
 -- Stored procedure to update cargo
@@ -203,7 +213,7 @@ BEGIN
         -- Return failure code
         SELECT 0 AS status;
     END IF;
-END //
+END//
 DELIMITER ;
 
 -- Stored procedure to delete cargo
@@ -239,12 +249,12 @@ BEGIN
         -- Return failure code
         SELECT 0 AS status;
     END IF;
-END //
+END//
 DELIMITER ;
 
 -- Cargo table creation script (if needed)
-
-CREATE TABLE IF NOT EXISTS cargo (
+DROP TABLE IF EXISTS cargo;
+CREATE TABLE cargo (
     cargo_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     description VARCHAR(255) NOT NULL,
@@ -298,21 +308,17 @@ INSERT INTO ports (name, country, location, status) VALUES
 ('Port of Mombasa', 'Kenya', POINT(39.6682, -4.0435), 'inactive');
 
 -- Insert sample cargo for different customers
-
 INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special_instructions, status) VALUES
 (1, 'Electronics Shipment', 'container', 5000.00, '20x8x8.5', 'Handle with care. Keep dry.', 'pending'),
 (1, 'Machine Parts', 'container', 12000.50, '40x8x8.5', 'Heavy equipment inside.', 'booked'),
 (1, 'Refrigerated Goods', 'container', 8000.75, '40x8x8.5', 'Maintain temperature between 2-4°C', 'in_transit'),
-
 (5, 'Furniture Set', 'container', 3500.00, '20×8×8.5', 'Fragile items inside.', 'pending'),
 (5, 'Office Supplies', 'bulk', 1200.00, '8×6×4', 'Standard handling.', 'booked'),
 (5, 'Textiles', 'bulk', 750.50, '5×4×3', 'Keep away from moisture.', 'delivered'),
-
 (6, 'Construction Materials', 'bulk', 15000.00, '30×10×5', 'Heavy materials.', 'pending'),
 (6, 'Vehicles - 3 Cars', 'vehicle', 5200.00, '40×8×8.5', 'Luxury vehicles, special handling required.', 'booked'),
 (6, 'Industrial Chemicals', 'liquid', 12000.00, '20×8×8.5', 'Hazardous materials. Follow safety protocols.', 'in_transit'),
 (6, 'Medical Supplies', 'container', 2800.00, '20×8×8.5', 'Priority shipment. Temperature controlled.', 'delivered');
-
 
 -- Add more varied cargo types for filtering demo
 INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special_instructions, status) VALUES
@@ -323,9 +329,9 @@ INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special
 (6, 'Wine Barrels', 'container', 4200.00, '20×8×8.5', 'Temperature controlled. Handle with care.', 'pending'),
 (6, 'Milk Products', 'liquid', 10000.00, '20×8×8.5', 'Refrigerated transport required.', 'booked');
 
-
---tables for shipowner
+-- Tables for shipowner
 -- Table for ships
+DROP TABLE IF EXISTS ships;
 CREATE TABLE ships (
     ship_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -344,6 +350,10 @@ CREATE TABLE ships (
 );
 
 -- Table for routes
+-- Drop existing routes table if it exists
+DROP TABLE IF EXISTS routes;
+
+-- Create routes table with new columns
 CREATE TABLE routes (
     route_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -351,17 +361,26 @@ CREATE TABLE routes (
     destination_port_id INT NOT NULL,
     distance DECIMAL(10, 2) NOT NULL COMMENT 'Distance in nautical miles',
     duration DECIMAL(6, 2) NOT NULL COMMENT 'Duration in days',
-    status ENUM('active', 'inactive', 'seasonal', 'deleted') NOT NULL,
+    status ENUM('active', 'inactive', 'seasonal', 'deleted') NOT NULL DEFAULT 'active',
     owner_id INT NOT NULL,
+    ship_id INT,
+    cost_per_kg DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
     FOREIGN KEY (origin_port_id) REFERENCES ports(port_id),
     FOREIGN KEY (destination_port_id) REFERENCES ports(port_id),
     FOREIGN KEY (owner_id) REFERENCES users(user_id),
-    CONSTRAINT different_ports CHECK (origin_port_id != destination_port_id)
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id),
+    
+    CONSTRAINT different_ports CHECK (origin_port_id != destination_port_id),
+    CONSTRAINT positive_distance CHECK (distance > 0),
+    CONSTRAINT positive_duration CHECK (duration > 0),
+    CONSTRAINT non_negative_cost CHECK (cost_per_kg >= 0)
 );
 
 -- Table for voyage schedules
+DROP TABLE IF EXISTS schedules;
 CREATE TABLE schedules (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     ship_id INT NOT NULL,
@@ -376,9 +395,7 @@ CREATE TABLE schedules (
     CONSTRAINT valid_dates CHECK (arrival_date > departure_date)
 );
 
--- Add 'shipowner' role to roles table
-INSERT INTO roles (role_name) VALUES ('shipowner');
-
-select * from user_roles where user_id = 1; -- Check roles assigned to Chandan (user_id = 1)
+-- Check roles assigned to Chandan (user_id = 1)
+select * from user_roles where user_id = 1; 
 
 select * from users;
