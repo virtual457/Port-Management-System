@@ -56,4 +56,11 @@ urlpatterns = [
     path('shipowner/routes/add/', shipowner_views.add_route, name='add-route'),
     path('shipowner/routes/edit/', shipowner_views.edit_route, name='edit-route'),
     path('shipowner/routes/delete/', shipowner_views.delete_route, name='delete-route'),
+        
+    # Schedules management
+    path('shipowner/schedules/', shipowner_views.manage_schedules, name='manage-schedules'),
+    path('shipowner/schedules/add-page/', shipowner_views.add_schedule_page, name='add-schedule-page'),
+    path('shipowner/schedules/add/', shipowner_views.add_schedule, name='add-schedule'),
+    path('shipowner/schedules/edit/', shipowner_views.edit_schedule, name='edit-schedule'),
+    path('shipowner/schedules/delete/', shipowner_views.delete_schedule, name='delete-schedule'),
 ]

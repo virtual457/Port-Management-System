@@ -8,6 +8,8 @@ from django.db import connection
 
 from .views import role_required  # Import the role_required decorator from your main views
 
+from datetime import datetime, timedelta
+
 # Utility to check if user is a shipowner
 def shipowner_required(view_func):
     return role_required('shipowner')(view_func)
@@ -789,3 +791,569 @@ def get_ship_details(request, ship_id):
         }
     
     return JsonResponse(ship_data)
+
+
+@shipowner_required
+@shipowner_required
+def manage_schedules(request):
+    """
+    View function for managing ship schedules.
+    Lists all schedules created by the shipowner with filtering.
+    """
+    # Get filter parameters from request
+    ship_name = request.GET.get('ship_name', '').strip() or None
+    port_name = request.GET.get('port_name', '').strip() or None
+    status = request.GET.get('status', '').strip() or None
+    date_from = request.GET.get('date_from', '').strip() or None
+    date_to = request.GET.get('date_to', '').strip() or None
+    page_number = request.GET.get('page', 1)
+    
+    # Get user_id from session
+    user_id = request.session.get('user_id')
+    
+    # Convert date strings to proper format for SQL query
+    if date_from:
+        try:
+            date_from = datetime.strptime(date_from, '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            date_from = None
+    
+    if date_to:
+        try:
+            date_to = datetime.strptime(date_to, '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            date_to = None
+    
+    # Get all schedules created by the shipowner
+    query = """
+        SELECT sc.schedule_id, sc.departure_date, sc.arrival_date, sc.status,
+               sc.actual_departure, sc.actual_arrival,
+               s.ship_id, s.name AS ship_name, s.ship_type,
+               r.route_id, r.name AS route_name,
+               po.name AS origin_port, po.port_id AS origin_port_id,
+               pd.name AS destination_port, pd.port_id AS destination_port_id,
+               r.distance, r.duration
+        FROM schedules sc
+        JOIN ships s ON sc.ship_id = s.ship_id
+        JOIN routes r ON sc.route_id = r.route_id
+        JOIN ports po ON r.origin_port_id = po.port_id
+        JOIN ports pd ON r.destination_port_id = pd.port_id
+        WHERE s.owner_id = %s
+          AND (%s IS NULL OR s.name LIKE CONCAT('%%', %s, '%%'))
+          AND (%s IS NULL OR po.name LIKE CONCAT('%%', %s, '%%') OR pd.name LIKE CONCAT('%%', %s, '%%'))
+          AND (%s IS NULL OR sc.status = %s)
+          AND (%s IS NULL OR sc.departure_date >= %s)
+          AND (%s IS NULL OR sc.departure_date <= %s)
+        ORDER BY sc.departure_date DESC
+    """
+    
+    params = [user_id, ship_name, ship_name, port_name, port_name, port_name, 
+              status, status, date_from, date_from, date_to, date_to]
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        schedules_raw = cursor.fetchall()
+        
+        # Get username
+        cursor.execute("SELECT get_username(%s)", [user_id])
+        username = cursor.fetchone()[0]
+        
+        # Get all active ships for filter dropdown
+        cursor.execute("""
+            SELECT ship_id, name
+            FROM ships
+            WHERE owner_id = %s AND status != 'deleted'
+            ORDER BY name
+        """, [user_id])
+        ships_raw = cursor.fetchall()
+        
+        # Get all ports for filter dropdown
+        cursor.execute("""
+            SELECT port_id, name
+            FROM ports 
+            WHERE status = 'active'
+            ORDER BY name
+        """)
+        ports_raw = cursor.fetchall()
+    
+    # Transform raw data to dictionary list
+    schedules_list = []
+    for row in schedules_raw:
+        # Format dates for display
+        departure_date = row[1].strftime('%Y-%m-%d %H:%M') if row[1] else None
+        arrival_date = row[2].strftime('%Y-%m-%d %H:%M') if row[2] else None
+        actual_departure = row[4].strftime('%Y-%m-%d %H:%M') if row[4] else None
+        actual_arrival = row[5].strftime('%Y-%m-%d %H:%M') if row[5] else None
+        
+        schedules_list.append({
+            'id': row[0],
+            'departure_date': departure_date,
+            'arrival_date': arrival_date,
+            'status': row[3],
+            'actual_departure': actual_departure,
+            'actual_arrival': actual_arrival,
+            'max_cargo': 0,  # Default value since we don't have this in the DB yet
+            'ship_id': row[6],
+            'ship_name': row[7],
+            'ship_type': row[8],
+            'route_id': row[9],
+            'route_name': row[10],
+            'origin_port': row[11],
+            'origin_port_id': row[12],
+            'destination_port': row[13],
+            'destination_port_id': row[14],
+            'distance': row[15],
+            'duration': row[16],
+            'notes': ''  # Default empty string since we don't have this yet
+        })
+    
+    ships_list = [
+        {
+            'id': row[0],
+            'name': row[1]
+        }
+        for row in ships_raw
+    ]
+    
+    ports_list = [
+        {
+            'id': row[0],
+            'name': row[1]
+        }
+        for row in ports_raw
+    ]
+    
+    # Apply pagination
+    paginator = Paginator(schedules_list, 5)  # Show 5 schedules per page
+    schedules_page = paginator.get_page(page_number)
+    
+    context = {
+        'schedules': schedules_page,
+        'ships': ships_list,
+        'ports': ports_list,
+        'username': username,
+        'statuses': ['scheduled', 'in_progress', 'completed', 'delayed', 'cancelled']
+    }
+    
+    return render(request, 'manage_schedules.html', context)
+
+@shipowner_required
+def add_schedule_page(request):
+    """
+    View function for displaying the add schedule form.
+    """
+    # Get user_id from session
+    user_id = request.session.get('user_id')
+    
+    with connection.cursor() as cursor:
+        # Get username
+        cursor.execute("SELECT get_username(%s)", [user_id])
+        username = cursor.fetchone()[0]
+        
+        # Get all active ships owned by the shipowner
+        cursor.execute("""
+            SELECT s.ship_id, s.name, s.ship_type, s.capacity, s.current_port_id, p.name as current_port_name
+            FROM ships s
+            LEFT JOIN ports p ON s.current_port_id = p.port_id
+            WHERE s.owner_id = %s AND s.status != 'deleted'
+            ORDER BY s.name
+        """, [user_id])
+        ships_raw = cursor.fetchall()
+        
+        # Get all active routes owned by the shipowner
+        cursor.execute("""
+            SELECT r.route_id, r.name, r.origin_port_id, r.destination_port_id, 
+                   r.distance, r.duration, po.name as origin_port, pd.name as destination_port
+            FROM routes r
+            JOIN ports po ON r.origin_port_id = po.port_id
+            JOIN ports pd ON r.destination_port_id = pd.port_id
+            WHERE r.owner_id = %s AND r.status != 'deleted'
+            ORDER BY r.name
+        """, [user_id])
+        routes_raw = cursor.fetchall()
+        
+        # Get all active ports for reference
+        cursor.execute("""
+            SELECT port_id, name, country
+            FROM ports 
+            WHERE status = 'active'
+            ORDER BY name
+        """)
+        ports_raw = cursor.fetchall()
+    
+    # Transform raw data to dictionary list
+    ships_list = [
+        {
+            'id': row[0],
+            'name': row[1],
+            'type': row[2],
+            'capacity': row[3],
+            'current_port_id': row[4],
+            'current_port_name': row[5]
+        }
+        for row in ships_raw
+    ]
+    
+    routes_list = [
+        {
+            'id': row[0],
+            'name': row[1],
+            'origin_id': row[2],
+            'destination_id': row[3],
+            'distance': row[4],
+            'duration': row[5],
+            'origin_port': row[6],
+            'destination_port': row[7]
+        }
+        for row in routes_raw
+    ]
+    
+    ports_list = [
+        {
+            'id': row[0],
+            'name': row[1],
+            'country': row[2]
+        }
+        for row in ports_raw
+    ]
+    
+    # Add JSON serialized data for JavaScript
+    import json
+    
+    context = {
+        'ships': ships_list,
+        'routes': routes_list,
+        'ports': ports_list,
+        'ports_json': json.dumps(ports_list),  # Add this line
+        'username': username
+    }
+    
+    return render(request, 'add_schedule.html', context)
+
+@shipowner_required
+@shipowner_required
+def add_schedule(request):
+    """
+    View function for adding a new schedule.
+    Inserts schedule information into the database.
+    """
+    if request.method == 'POST':
+        ship_id = request.POST.get('ship_id')
+        route_id = request.POST.get('route_id')
+        departure_date = request.POST.get('departure_date')
+        arrival_date = request.POST.get('arrival_date')
+        status = request.POST.get('status', 'scheduled')
+        
+        # We're not saving these values since the columns don't exist yet
+        # max_cargo = request.POST.get('max_cargo', 0)
+        # notes = request.POST.get('notes', '')
+        
+        # Get user_id from session
+        user_id = request.session.get('user_id')
+        
+        if not (ship_id and route_id and departure_date and arrival_date):
+            messages.error(request, "Required fields are missing.")
+            return redirect('add-schedule-page')
+        
+        try:
+            # Parse dates
+            departure_datetime = datetime.strptime(departure_date, '%Y-%m-%d %H:%M')
+            arrival_datetime = datetime.strptime(arrival_date, '%Y-%m-%d %H:%M')
+            
+            # Validate that arrival is after departure
+            if arrival_datetime <= departure_datetime:
+                messages.error(request, "Arrival date must be after departure date.")
+                return redirect('add-schedule-page')
+            
+            with connection.cursor() as cursor:
+                # Check if ship belongs to user
+                cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
+                if cursor.fetchone()[0] == 0:
+                    messages.error(request, "You don't have permission to schedule this ship.")
+                    return redirect('add-schedule-page')
+                
+                # Check if route belongs to user
+                cursor.execute("SELECT COUNT(*) FROM routes WHERE route_id = %s AND owner_id = %s", [route_id, user_id])
+                if cursor.fetchone()[0] == 0:
+                    messages.error(request, "You don't have permission to use this route.")
+                    return redirect('add-schedule-page')
+                
+                # Check for scheduling conflicts (overlapping schedules for the same ship)
+                cursor.execute("""
+                    SELECT COUNT(*) FROM schedules 
+                    WHERE ship_id = %s
+                    AND (
+                        (departure_date <= %s AND arrival_date >= %s) OR
+                        (departure_date <= %s AND arrival_date >= %s) OR
+                        (departure_date >= %s AND arrival_date <= %s)
+                    )
+                    AND status != 'cancelled'
+                """, [ship_id, departure_datetime, departure_datetime, arrival_datetime, arrival_datetime, 
+                      departure_datetime, arrival_datetime])
+                
+                if cursor.fetchone()[0] > 0:
+                    messages.error(request, "This ship is already scheduled during the selected time period.")
+                    return redirect('add-schedule-page')
+                
+                # Get ship details
+                cursor.execute("""
+                    SELECT name, current_port_id
+                    FROM ships
+                    WHERE ship_id = %s
+                """, [ship_id])
+                ship_data = cursor.fetchone()
+                ship_name = ship_data[0]
+                current_port_id = ship_data[1]
+                
+                # Get route details
+                cursor.execute("""
+                    SELECT origin_port_id, po.name as origin_name, destination_port_id, pd.name as dest_name
+                    FROM routes r
+                    JOIN ports po ON r.origin_port_id = po.port_id
+                    JOIN ports pd ON r.destination_port_id = pd.port_id
+                    WHERE route_id = %s
+                """, [route_id])
+                route_data = cursor.fetchone()
+                origin_port_id = route_data[0]
+                origin_port_name = route_data[1]
+                destination_port_id = route_data[2]
+                destination_port_name = route_data[3]
+                
+                # Insert the schedule (removed max_cargo and notes)
+                cursor.execute("""
+                    INSERT INTO schedules (
+                        ship_id, route_id, departure_date, arrival_date, status
+                    ) VALUES (%s, %s, %s, %s, %s)
+                """, [ship_id, route_id, departure_datetime, arrival_datetime, status])
+                
+                # Update the ship status based on the schedule
+                if status == 'scheduled':
+                    if current_port_id == origin_port_id:
+                        # If ship is already at the origin port, it's ready
+                        update_status = 'docked'
+                    else:
+                        # If ship needs to be repositioned, mark it for repositioning
+                        update_status = 'maintenance'
+                elif status == 'in_progress':
+                    update_status = 'in_transit'
+                else:
+                    update_status = 'active'
+                
+                cursor.execute("""
+                    UPDATE ships
+                    SET status = %s
+                    WHERE ship_id = %s
+                """, [update_status, ship_id])
+                
+            # Set success message
+            success_message = f"Schedule created successfully for {ship_name} from {origin_port_name} to {destination_port_name}."
+            
+            # Add a note if the ship needs repositioning
+            if status == 'scheduled' and current_port_id != origin_port_id:
+                success_message += " Note: The ship needs to be repositioned to the origin port before departure."
+            
+            messages.success(request, success_message)
+            
+        except ValueError as e:
+            # Handle date parsing errors
+            messages.error(request, f"Invalid date format: {str(e)}")
+            return redirect('add-schedule-page')
+        except Exception as e:
+            # Handle general errors
+            messages.error(request, f"Error creating schedule: {str(e)}")
+            return redirect('add-schedule-page')
+        
+        # Redirect to the schedules list page
+        return redirect('manage-schedules')
+    
+    # If not POST, redirect to the add schedule form page
+    return redirect('add-schedule-page')
+
+@shipowner_required
+def edit_schedule(request):
+    """
+    View function for editing a schedule.
+    Updates schedule information in the database.
+    """
+    if request.method == 'POST':
+        schedule_id = request.POST.get('id')
+        departure_date = request.POST.get('departure_date')
+        arrival_date = request.POST.get('arrival_date')
+        status = request.POST.get('status')
+        actual_departure = request.POST.get('actual_departure') or None
+        actual_arrival = request.POST.get('actual_arrival') or None
+        max_cargo = request.POST.get('max_cargo', 0)
+        notes = request.POST.get('notes', '')
+        
+        # Get user_id from session
+        user_id = request.session.get('user_id')
+        
+        if not (schedule_id and departure_date and arrival_date and status):
+            messages.error(request, "Required fields are missing.")
+            return redirect('manage-schedules')
+        
+        try:
+            # Parse dates
+            departure_datetime = datetime.strptime(departure_date, '%Y-%m-%d %H:%M')
+            arrival_datetime = datetime.strptime(arrival_date, '%Y-%m-%d %H:%M')
+            
+            if actual_departure:
+                actual_departure_datetime = datetime.strptime(actual_departure, '%Y-%m-%d %H:%M')
+            else:
+                actual_departure_datetime = None
+                
+            if actual_arrival:
+                actual_arrival_datetime = datetime.strptime(actual_arrival, '%Y-%m-%d %H:%M')
+            else:
+                actual_arrival_datetime = None
+            
+            # Validate that arrival is after departure
+            if arrival_datetime <= departure_datetime:
+                messages.error(request, "Arrival date must be after departure date.")
+                return redirect('manage-schedules')
+            
+            with connection.cursor() as cursor:
+                # Check if schedule exists and is associated with a ship owned by the user
+                cursor.execute("""
+                    SELECT sc.ship_id, s.name as ship_name, s.current_port_id, 
+                           r.origin_port_id, po.name as origin_name, 
+                           r.destination_port_id, pd.name as dest_name,
+                           sc.status as current_status
+                    FROM schedules sc
+                    JOIN ships s ON sc.ship_id = s.ship_id
+                    JOIN routes r ON sc.route_id = r.route_id
+                    JOIN ports po ON r.origin_port_id = po.port_id
+                    JOIN ports pd ON r.destination_port_id = pd.port_id
+                    WHERE sc.schedule_id = %s AND s.owner_id = %s
+                """, [schedule_id, user_id])
+                
+                schedule_data = cursor.fetchone()
+                
+                if not schedule_data:
+                    messages.error(request, "Schedule not found or you don't have permission to edit it.")
+                    return redirect('manage-schedules')
+                
+                ship_id = schedule_data[0]
+                ship_name = schedule_data[1]
+                current_port_id = schedule_data[2]
+                origin_port_id = schedule_data[3]
+                origin_port_name = schedule_data[4]
+                destination_port_id = schedule_data[5]
+                destination_port_name = schedule_data[6]
+                current_status = schedule_data[7]
+                
+                # Check for scheduling conflicts with other schedules (excluding this one)
+                cursor.execute("""
+                    SELECT COUNT(*) FROM schedules 
+                    WHERE ship_id = %s
+                    AND schedule_id != %s
+                    AND (
+                        (departure_date <= %s AND arrival_date >= %s) OR
+                        (departure_date <= %s AND arrival_date >= %s) OR
+                        (departure_date >= %s AND arrival_date <= %s)
+                    )
+                    AND status != 'cancelled'
+                """, [ship_id, schedule_id, departure_datetime, departure_datetime, 
+                      arrival_datetime, arrival_datetime, departure_datetime, arrival_datetime])
+                
+                if cursor.fetchone()[0] > 0:
+                    messages.error(request, "This ship is already scheduled during the selected time period.")
+                    return redirect('manage-schedules')
+                
+                # Update the schedule
+                cursor.execute("""
+                    UPDATE schedules
+                    SET departure_date = %s, arrival_date = %s, status = %s,
+                        actual_departure = %s, actual_arrival = %s,
+                        max_cargo = %s, notes = %s
+                    WHERE schedule_id = %s
+                """, [departure_datetime, arrival_datetime, status, 
+                      actual_departure_datetime, actual_arrival_datetime,
+                      max_cargo, notes, schedule_id])
+                
+                # Update the ship status if schedule status has changed
+                if status != current_status:
+                    if status == 'scheduled':
+                        if current_port_id == origin_port_id:
+                            update_status = 'docked'
+                        else:
+                            update_status = 'maintenance'
+                    elif status == 'in_progress':
+                        update_status = 'in_transit'
+                    elif status == 'completed':
+                        # If completed, move the ship to the destination port
+                        cursor.execute("""
+                            UPDATE ships
+                            SET status = 'docked', current_port_id = %s
+                            WHERE ship_id = %s
+                        """, [destination_port_id, ship_id])
+                    else:
+                        update_status = 'active'
+                    
+                    if status != 'completed':
+                        cursor.execute("""
+                            UPDATE ships
+                            SET status = %s
+                            WHERE ship_id = %s
+                        """, [update_status, ship_id])
+                
+            messages.success(request, f"Schedule for {ship_name} updated successfully.")
+            
+        except ValueError as e:
+            # Handle date parsing errors
+            messages.error(request, f"Invalid date format: {str(e)}")
+        except Exception as e:
+            # Handle general errors
+            messages.error(request, f"Error updating schedule: {str(e)}")
+        
+        return redirect('manage-schedules')
+    
+    # If not POST, redirect back to manage schedules page
+    return redirect('manage-schedules')
+
+@shipowner_required
+def delete_schedule(request):
+    """
+    View function for deleting a schedule.
+    Removes the schedule from the database.
+    """
+    if request.method == 'POST':
+        schedule_id = request.POST.get('id')
+        
+        # Get user_id from session
+        user_id = request.session.get('user_id')
+        
+        if not schedule_id:
+            messages.error(request, "No schedule specified.")
+            return redirect('manage-schedules')
+        
+        try:
+            with connection.cursor() as cursor:
+                # Check if schedule exists and is associated with a ship owned by the user
+                cursor.execute("""
+                    SELECT sc.ship_id, s.name as ship_name
+                    FROM schedules sc
+                    JOIN ships s ON sc.ship_id = s.ship_id
+                    WHERE sc.schedule_id = %s AND s.owner_id = %s
+                """, [schedule_id, user_id])
+                
+                schedule_data = cursor.fetchone()
+                
+                if not schedule_data:
+                    messages.error(request, "Schedule not found or you don't have permission to delete it.")
+                    return redirect('manage-schedules')
+                
+                ship_name = schedule_data[1]
+                
+                # Delete the schedule
+                cursor.execute("DELETE FROM schedules WHERE schedule_id = %s", [schedule_id])
+                
+            messages.success(request, f"Schedule for {ship_name} deleted successfully.")
+            
+        except Exception as e:
+            messages.error(request, f"Error deleting schedule: {str(e)}")
+        
+        return redirect('manage-schedules')
+    
+    # If not POST, redirect back to manage schedules page
+    return redirect('manage-schedules')

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Schedule Journey</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .schedule-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .journey-details {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #6c757d;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Shipowner Menu</h5>
+    <hr class="bg-light">
+    <a href="/shipowner/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/shipowner/ships"><i class="bi bi-ship me-2"></i> Manage Ships</a>
+    <a href="/shipowner/routes"><i class="bi bi-signpost-split me-2"></i> Manage Routes</a>
+    <a href="/shipowner/schedules"><i class="bi bi-calendar-check me-2"></i> Schedules</a>
+    <a href="/shipowner/cargo-requests"><i class="bi bi-box-seam me-2"></i> Cargo Requests</a>
+    <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-ship me-2"></i> Shipowner Portal
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Captain" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="dashboard-card">
+        <h3 class="mb-4 text-center">Schedule New Journey</h3>
+
+        <!-- Messages/Alerts section -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form id="scheduleForm" action="{% url 'add-schedule' %}" method="post">
+            {% csrf_token %}
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="bi bi-calendar-plus me-2"></i>Schedule Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="ship_id" class="form-label">Ship*</label>
+                                <select class="form-select" id="ship_id" name="ship_id" required>
+                                    <option value="" selected disabled>Select a ship</option>
+                                    {% for ship in ships %}
+                                        <option value="{{ ship.id }}" 
+                                                data-type="{{ ship.type }}" 
+                                                data-capacity="{{ ship.capacity }}"
+                                                data-current-port="{{ ship.current_port_id }}">
+                                            {{ ship.name }} ({{ ship.type|title }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="route_id" class="form-label">Route*</label>
+                                <select class="form-select" id="route_id" name="route_id" required>
+                                    <option value="" selected disabled>Select a route</option>
+                                    {% for route in routes %}
+                                        <option value="{{ route.id }}" 
+                                                data-origin="{{ route.origin_id }}"
+                                                data-destination="{{ route.destination_id }}"
+                                                data-duration="{{ route.duration }}"
+                                                data-distance="{{ route.distance }}">
+                                            {{ route.name }} ({{ route.origin_port }} to {{ route.destination_port }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="departure_date" class="form-label">Departure Date and Time*</label>
+                                <input type="text" class="form-control" id="departure_date" name="departure_date" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="arrival_date" class="form-label">Estimated Arrival Date and Time*</label>
+                                <input type="text" class="form-control" id="arrival_date" name="arrival_date" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="status" class="form-label">Status*</label>
+                                <select class="form-select" id="status" name="status" required>
+                                    <option value="scheduled" selected>Scheduled</option>
+                                    <option value="delayed">Delayed</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Journey Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info mb-3" role="alert">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                Select a ship and route to see journey details
+                            </div>
+
+                            <div id="journeyDetails" class="journey-details" style="display: none;">
+                                <div class="mb-3">
+                                    <strong>Ship:</strong> <span id="shipNameDisplay">-</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Ship Type:</strong> <span id="shipTypeDisplay">-</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Capacity:</strong> <span id="capacityDisplay">-</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Route:</strong> <span id="routeDisplay">-</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Distance:</strong> <span id="distanceDisplay">-</span> nautical miles
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Estimated Duration:</strong> <span id="durationDisplay">-</span> days
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Departure Port:</strong> <span id="departurePortDisplay">-</span>
+                                </div>
+                                <div class="mb-3">
+                                    <strong>Destination Port:</strong> <span id="destinationPortDisplay">-</span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="max_cargo" class="form-label">Available Cargo Capacity (kg)*</label>
+                                    <input type="number" class="form-control" id="max_cargo" name="max_cargo" min="0" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="notes" class="form-label">Journey Notes</label>
+                                    <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button type="button" class="btn btn-secondary me-2" onclick="window.location.href='/shipowner/schedules'">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Schedules
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-calendar-check me-1"></i> Create Schedule
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Initialize date pickers
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize datetime pickers with flatpickr
+        flatpickr("#departure_date", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            minDate: "today",
+            time_24hr: true
+        });
+
+        flatpickr("#arrival_date", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            minDate: "today",
+            time_24hr: true
+        });
+
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert-dismissible');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+
+        // Set up ship selection handler
+        const shipSelect = document.getElementById('ship_id');
+        const routeSelect = document.getElementById('route_id');
+        const maxCargoInput = document.getElementById('max_cargo');
+        const journeyDetails = document.getElementById('journeyDetails');
+        
+        // Port data for lookups - in a real app, this would come from the backend
+        const portData = {};
+        {% for port in ports %}
+            portData[{{ port.id }}] = { 
+                name: "{{ port.name }}", 
+                country: "{{ port.country }}" 
+            };
+        {% endfor %}
+
+        // Update journey details when ship or route changes
+        const updateJourneyDetails = function() {
+            const selectedShip = shipSelect.options[shipSelect.selectedIndex];
+            const selectedRoute = routeSelect.options[routeSelect.selectedIndex];
+            
+            if (selectedShip && selectedShip.value && selectedRoute && selectedRoute.value) {
+                // Show journey details section
+                journeyDetails.style.display = 'block';
+                
+                // Set ship details
+                document.getElementById('shipNameDisplay').textContent = selectedShip.text;
+                document.getElementById('shipTypeDisplay').textContent = selectedShip.getAttribute('data-type');
+                
+                const capacity = selectedShip.getAttribute('data-capacity');
+                document.getElementById('capacityDisplay').textContent = capacity;
+                
+                // Set route details
+                document.getElementById('routeDisplay').textContent = selectedRoute.text;
+                document.getElementById('distanceDisplay').textContent = selectedRoute.getAttribute('data-distance');
+                document.getElementById('durationDisplay').textContent = selectedRoute.getAttribute('data-duration');
+                
+                // Get port data
+                const originId = selectedRoute.getAttribute('data-origin');
+                const destinationId = selectedRoute.getAttribute('data-destination');
+                
+                document.getElementById('departurePortDisplay').textContent = 
+                    portData[originId] ? `${portData[originId].name}, ${portData[originId].country}` : 'Unknown';
+                document.getElementById('destinationPortDisplay').textContent = 
+                    portData[destinationId] ? `${portData[destinationId].name}, ${portData[destinationId].country}` : 'Unknown';
+                
+                // Set suggested available cargo capacity (80% of ship capacity)
+                maxCargoInput.value = Math.floor(capacity * 0.8);
+                
+                // Set suggested arrival date based on departure and route duration
+                const departureDateInput = document.getElementById('departure_date');
+                const arrivalDateInput = document.getElementById('arrival_date');
+                
+                if (departureDateInput.value) {
+                    const departureDate = new Date(departureDateInput.value);
+                    const durationDays = parseFloat(selectedRoute.getAttribute('data-duration'));
+                    
+                    if (!isNaN(departureDate.getTime()) && !isNaN(durationDays)) {
+                        const arrivalDate = new Date(departureDate);
+                        arrivalDate.setDate(arrivalDate.getDate() + Math.ceil(durationDays));
+                        
+                        const arrivalPicker = arrivalDateInput._flatpickr;
+                        if (arrivalPicker) {
+                            arrivalPicker.setDate(arrivalDate);
+                        }
+                    }
+                }
+                
+                // Check if ship's current port matches route origin
+                const currentPortId = selectedShip.getAttribute('data-current-port');
+                if (currentPortId && currentPortId !== originId) {
+                    // Show warning that ship is not at the origin port
+                    if (!document.getElementById('portMismatchWarning')) {
+                        const warning = document.createElement('div');
+                        warning.id = 'portMismatchWarning';
+                        warning.className = 'alert alert-warning mt-3';
+                        warning.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i> 
+                            <strong>Warning:</strong> This ship is not currently at the origin port. 
+                            You may need to reposition it before departure.`;
+                        journeyDetails.appendChild(warning);
+                    }
+                } else {
+                    // Remove warning if it exists
+                    const existingWarning = document.getElementById('portMismatchWarning');
+                    if (existingWarning) {
+                        existingWarning.remove();
+                    }
+                }
+            } else {
+                // Hide journey details if either ship or route is not selected
+                journeyDetails.style.display = 'none';
+            }
+        };
+
+        // Attach event handlers
+        shipSelect.addEventListener('change', updateJourneyDetails);
+        routeSelect.addEventListener('change', updateJourneyDetails);
+        
+        // Update arrival date when departure date changes
+        document.getElementById('departure_date').addEventListener('change', function() {
+            if (routeSelect.value) {
+                updateJourneyDetails();
+            }
+        });
+
+        // Form validation before submit
+        document.getElementById('scheduleForm').addEventListener('submit', function(event) {
+            const departureDate = new Date(document.getElementById('departure_date').value);
+            const arrivalDate = new Date(document.getElementById('arrival_date').value);
+            
+            // Check if arrival date is after departure date
+            if (arrivalDate <= departureDate) {
+                event.preventDefault();
+                alert('Arrival date must be after departure date');
+                return false;
+            }
+            
+            // Additional validation could be added here
+            return true;
+        });
+    });
+</script>
+</body>
+</html>

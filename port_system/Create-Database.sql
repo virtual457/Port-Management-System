@@ -394,7 +394,10 @@ CREATE TABLE routes (
 );
 
 -- Table for voyage schedules
+-- Drop the existing schedules table (this will delete all existing data)
 DROP TABLE IF EXISTS schedules;
+
+-- Create the updated schedules table with max_cargo and notes columns
 CREATE TABLE schedules (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     ship_id INT NOT NULL,
@@ -404,10 +407,12 @@ CREATE TABLE schedules (
     actual_departure DATETIME,
     actual_arrival DATETIME,
     status ENUM('scheduled', 'in_progress', 'completed', 'cancelled', 'delayed') NOT NULL,
+    max_cargo DECIMAL(12, 2) DEFAULT 0.00,
+    notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (ship_id) REFERENCES ships(ship_id),
-    FOREIGN KEY (route_id) REFERENCES routes(route_id),
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE,
+    FOREIGN KEY (route_id) REFERENCES routes(route_id) ON DELETE CASCADE,
     CONSTRAINT valid_dates CHECK (arrival_date > departure_date)
 );
 
