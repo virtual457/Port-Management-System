@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Berths</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .berth-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .port-selector {
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Menu</h5>
+    <hr class="bg-light">
+    <a href="/admin/dashboard"><i class="bi bi-speedometer2 me-2"></i> Admin Dashboard</a>
+    <a href="/admin/manage-users"><i class="bi bi-people me-2"></i> Manage Users</a>
+    <a href="/admin/manage-ports"><i class="bi bi-geo-alt me-2"></i> Manage Ports</a>
+    <a href="/admin/manage-berths"><i class="bi bi-truck me-2"></i> Manage Berths</a>
+    <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-truck me-2"></i> Port System - Berth Management
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Admin" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="dashboard-card">
+        <h3 class="mb-4 text-center">Manage Berths</h3>
+
+        <!-- Port Selector -->
+        <div class="mb-4">
+            <form method="get" class="d-flex align-items-center justify-content-between">
+                <div class="form-floating port-selector">
+                    <select name="port_id" id="portSelector" class="form-select" onchange="this.form.submit()">
+                        <option value="" {% if not selected_port %}selected{% endif %}>Select a port</option>
+                        {% for port in ports %}
+                            <option value="{{ port.id }}" {% if selected_port == port.id %}selected{% endif %}>
+                                {{ port.name }}, {{ port.country }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <label for="portSelector">Select Port</label>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-success" {% if not selected_port %}disabled{% endif %} data-bs-toggle="modal" data-bs-target="#addBerthModal">
+                        <i class="bi bi-plus-circle me-1"></i> Add Berth
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Messages/Alerts section -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Filter Berths (only shown when a port is selected) -->
+        {% if selected_port %}
+            <form method="get" class="mb-3">
+                <input type="hidden" name="port_id" value="{{ selected_port }}">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <select name="type" class="form-select">
+                            <option value="">All Berth Types</option>
+                            <option value="container" {% if request.GET.type == 'container' %}selected{% endif %}>Container</option>
+                            <option value="bulk" {% if request.GET.type == 'bulk' %}selected{% endif %}>Bulk</option>
+                            <option value="tanker" {% if request.GET.type == 'tanker' %}selected{% endif %}>Tanker</option>
+                            <option value="passenger" {% if request.GET.type == 'passenger' %}selected{% endif %}>Passenger</option>
+                            <option value="multipurpose" {% if request.GET.type == 'multipurpose' %}selected{% endif %}>Multipurpose</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select name="status" class="form-select">
+                            <option value="">All Statuses</option>
+                            <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="maintenance" {% if request.GET.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
+                            <option value="occupied" {% if request.GET.status == 'occupied' %}selected{% endif %}>Occupied</option>
+                            <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-outline-secondary w-100" type="submit">Apply Filters</button>
+                    </div>
+                </div>
+            </form>
+
+            <hr class="my-4">
+
+            <!-- Berths Table -->
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Berth Number</th>
+                            <th>Type</th>
+                            <th>Dimensions (L×W×D)</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for berth in berths %}
+                            <tr>
+                                <td>{{ berth.berth_number }}</td>
+                                <td>
+                                    {% if berth.type == 'container' %}
+                                        <span class="badge bg-primary berth-badge">Container</span>
+                                    {% elif berth.type == 'bulk' %}
+                                        <span class="badge bg-secondary berth-badge">Bulk</span>
+                                    {% elif berth.type == 'tanker' %}
+                                        <span class="badge bg-info berth-badge">Tanker</span>
+                                    {% elif berth.type == 'passenger' %}
+                                        <span class="badge bg-success berth-badge">Passenger</span>
+                                    {% elif berth.type == 'multipurpose' %}
+                                        <span class="badge bg-warning text-dark berth-badge">Multipurpose</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</td>
+                                <td>
+                                    {% if berth.status == 'active' %}
+                                        <span class="badge bg-success berth-badge">Active</span>
+                                    {% elif berth.status == 'maintenance' %}
+                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                    {% elif berth.status == 'occupied' %}
+                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                    {% elif berth.status == 'inactive' %}
+                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <button type="button"
+                                        class="btn btn-outline-info btn-sm view-berth-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#viewBerthModal"
+                                        data-id="{{ berth.berth_id }}"
+                                        data-number="{{ berth.berth_number }}"
+                                        data-type="{{ berth.type }}"
+                                        data-length="{{ berth.length }}"
+                                        data-width="{{ berth.width }}"
+                                        data-depth="{{ berth.depth }}"
+                                        data-status="{{ berth.status }}">
+                                        Details
+                                    </button>
+                                    <button type="button"
+                                        class="btn btn-outline-primary btn-sm edit-berth-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editBerthModal"
+                                        data-id="{{ berth.berth_id }}"
+                                        data-number="{{ berth.berth_number }}"
+                                        data-type="{{ berth.type }}"
+                                        data-length="{{ berth.length }}"
+                                        data-width="{{ berth.width }}"
+                                        data-depth="{{ berth.depth }}"
+                                        data-status="{{ berth.status }}">
+                                        Edit
+                                    </button>
+                                    <button type="button"
+                                        class="btn btn-outline-danger btn-sm delete-berth-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#deleteBerthModal"
+                                        data-id="{{ berth.berth_id }}"
+                                        data-number="{{ berth.berth_number }}">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No berths found for this port. Add some berths to get started!</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if berths.has_other_pages %}
+                <div class="mt-4">
+                    <nav>
+                        <ul class="pagination justify-content-center">
+                            {% if berths.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?port_id={{ selected_port }}&page={{ berths.previous_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a>
+                                </li>
+                            {% endif %}
+
+                            {% for num in berths.paginator.page_range %}
+                                <li class="page-item {% if berths.number == num %}active{% endif %}">
+                                    <a class="page-link" href="?port_id={{ selected_port }}&page={{ num }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endfor %}
+
+                            {% if berths.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?port_id={{ selected_port }}&page={{ berths.next_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+            {% endif %}
+        {% else %}
+            <div class="alert alert-info text-center">
+                Please select a port to manage its berths
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Berth Modal -->
+<div class="modal fade" id="addBerthModal" tabindex="-1" aria-labelledby="addBerthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addBerthModalLabel">Add New Berth</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addBerthForm" method="post" action="/admin/berths/add/">
+                    {% csrf_token %}
+                    <input type="hidden" name="port_id" value="{{ selected_port }}">
+                    <div class="mb-3">
+                        <label for="addBerthNumber" class="form-label">Berth Number</label>
+                        <input type="text" class="form-control" id="addBerthNumber" name="berth_number" required>
+                        <div class="form-text">Unique identifier for this berth within the port (e.g., B01, North-5)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addBerthType" class="form-label">Berth Type</label>
+                        <select class="form-select" id="addBerthType" name="type" required>
+                            <option value="" selected disabled>Select berth type</option>
+                            <option value="container">Container</option>
+                            <option value="bulk">Bulk</option>
+                            <option value="tanker">Tanker</option>
+                            <option value="passenger">Passenger</option>
+                            <option value="multipurpose">Multipurpose</option>
+                        </select>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="addBerthLength" class="form-label">Length (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="addBerthLength" name="length" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="addBerthWidth" class="form-label">Width (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="addBerthWidth" name="width" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="addBerthDepth" class="form-label">Depth (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="addBerthDepth" name="depth" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addBerthStatus" class="form-label">Status</label>
+                        <select class="form-select" id="addBerthStatus" name="status" required>
+                            <option value="active" selected>Active</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="occupied">Occupied</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="addBerthForm" class="btn btn-success">Add Berth</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Berth Modal -->
+<div class="modal fade" id="viewBerthModal" tabindex="-1" aria-labelledby="viewBerthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewBerthModalLabel">Berth Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Berth ID</h6>
+                        <p id="viewBerthId"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Berth Number</h6>
+                        <p id="viewBerthNumber"></p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Type</h6>
+                        <p id="viewBerthType"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Status</h6>
+                        <p id="viewBerthStatus"></p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Dimensions</h6>
+                    <p id="viewBerthDimensions"></p>
+                </div>
+                <div class="mb-3">
+                    <h6>Port</h6>
+                    <p>{{ selected_port_name }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Berth Modal -->
+<div class="modal fade" id="editBerthModal" tabindex="-1" aria-labelledby="editBerthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editBerthModalLabel">Edit Berth</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editBerthForm" method="post" action="/admin/berths/edit/">
+                    {% csrf_token %}
+                    <input type="hidden" id="editBerthId" name="berth_id">
+                    <input type="hidden" name="port_id" value="{{ selected_port }}">
+                    <div class="mb-3">
+                        <label for="editBerthNumber" class="form-label">Berth Number</label>
+                        <input type="text" class="form-control" id="editBerthNumber" name="berth_number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editBerthType" class="form-label">Berth Type</label>
+                        <select class="form-select" id="editBerthType" name="type" required>
+                            <option value="container">Container</option>
+                            <option value="bulk">Bulk</option>
+                            <option value="tanker">Tanker</option>
+                            <option value="passenger">Passenger</option>
+                            <option value="multipurpose">Multipurpose</option>
+                        </select>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="editBerthLength" class="form-label">Length (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="editBerthLength" name="length" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editBerthWidth" class="form-label">Width (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="editBerthWidth" name="width" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editBerthDepth" class="form-label">Depth (m)</label>
+                            <input type="number" step="0.01" min="1" class="form-control" id="editBerthDepth" name="depth" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editBerthStatus" class="form-label">Status</label>
+                        <select class="form-select" id="editBerthStatus" name="status" required>
+                            <option value="active">Active</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="occupied">Occupied</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="editBerthForm" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Berth Modal -->
+<div class="modal fade" id="deleteBerthModal" tabindex="-1" aria-labelledby="deleteBerthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteBerthModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete berth "<span id="deleteBerthNumber"></span>"?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+                <form id="deleteBerthForm" method="post" action="/admin/berths/delete/">
+                    {% csrf_token %}
+                    <input type="hidden" id="deleteBerthId" name="berth_id">
+                    <input type="hidden" name="port_id" value="{{ selected_port }}">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteBerthForm" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Modal functionality for berth management
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle View Berth Modal
+        const viewBerthModal = document.getElementById('viewBerthModal');
+        if (viewBerthModal) {
+            viewBerthModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const number = button.getAttribute('data-number');
+                const type = button.getAttribute('data-type');
+                const length = button.getAttribute('data-length');
+                const width = button.getAttribute('data-width');
+                const depth = button.getAttribute('data-depth');
+                const status = button.getAttribute('data-status');
+                
+                // Update modal content
+                document.getElementById('viewBerthId').textContent = id;
+                document.getElementById('viewBerthNumber').textContent = number;
+                
+                let typeDisplay = '';
+                switch(type) {
+                    case 'container':
+                        typeDisplay = '<span class="badge bg-primary">Container</span>';
+                        break;
+                    case 'bulk':
+                        typeDisplay = '<span class="badge bg-secondary">Bulk</span>';
+                        break;
+                    case 'tanker':
+                        typeDisplay = '<span class="badge bg-info">Tanker</span>';
+                        break;
+                    case 'passenger':
+                        typeDisplay = '<span class="badge bg-success">Passenger</span>';
+                        break;
+                    case 'multipurpose':
+                        typeDisplay = '<span class="badge bg-warning text-dark">Multipurpose</span>';
+                        break;
+                    default:
+                        typeDisplay = type;
+                }
+                document.getElementById('viewBerthType').innerHTML = typeDisplay;
+                
+                document.getElementById('viewBerthDimensions').textContent = `${length}m × ${width}m × ${depth}m`;
+                
+                const statusElement = document.getElementById('viewBerthStatus');
+                let statusHtml = '';
+                
+                switch(status) {
+                    case 'active':
+                        statusHtml = '<span class="badge bg-success">Active</span>';
+                        break;
+                    case 'maintenance':
+                        statusHtml = '<span class="badge bg-warning text-dark">Maintenance</span>';
+                        break;
+                    case 'occupied':
+                        statusHtml = '<span class="badge bg-info">Occupied</span>';
+                        break;
+                    case 'inactive':
+                        statusHtml = '<span class="badge bg-secondary">Inactive</span>';
+                        break;
+                    default:
+                        statusHtml = status;
+                }
+                
+                statusElement.innerHTML = statusHtml;
+            });
+        }
+        
+        // Handle Edit Berth Modal
+        const editBerthModal = document.getElementById('editBerthModal');
+        if (editBerthModal) {
+            editBerthModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const number = button.getAttribute('data-number');
+                const type = button.getAttribute('data-type');
+                const length = button.getAttribute('data-length');
+                const width = button.getAttribute('data-width');
+                const depth = button.getAttribute('data-depth');
+                const status = button.getAttribute('data-status');
+                
+                // Set form values
+                document.getElementById('editBerthId').value = id;
+                document.getElementById('editBerthNumber').value = number;
+                document.getElementById('editBerthType').value = type;
+                document.getElementById('editBerthLength').value = length;
+                document.getElementById('editBerthWidth').value = width;
+                document.getElementById('editBerthDepth').value = depth;
+                document.getElementById('editBerthStatus').value = status;
+            });
+        }
+        
+        // Handle Delete Berth Modal
+        const deleteBerthModal = document.getElementById('deleteBerthModal');
+        if (deleteBerthModal) {
+            deleteBerthModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const number = button.getAttribute('data-number');
+                
+                // Set modal content
+                document.getElementById('deleteBerthId').value = id;
+                document.getElementById('deleteBerthNumber').textContent = number;
+            });
+        }
+        
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert.alert-dismissible');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    });
+</script>
+</body>
+</html>

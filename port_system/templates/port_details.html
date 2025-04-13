@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ port.name }} - Port Details</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .port-map {
+            height: 400px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        .port-info {
+            margin-bottom: 30px;
+        }
+        .berth-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .section-heading {
+            border-bottom: 2px solid #e9ecef;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .berth-card {
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+        }
+        .berth-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-card {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .stat-card h5 {
+            margin-bottom: 0;
+            font-weight: 600;
+        }
+        .stat-card p {
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Menu</h5>
+    <hr class="bg-light">
+    <a href="/admin/dashboard"><i class="bi bi-speedometer2 me-2"></i> Admin Dashboard</a>
+    <a href="/admin/manage-users"><i class="bi bi-people me-2"></i> Manage Users</a>
+    <a href="/admin/manage-ports"><i class="bi bi-geo-alt me-2"></i> Manage Ports</a>
+    <a href="/admin/manage-berths"><i class="bi bi-truck me-2"></i> Manage Berths</a>
+    <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-geo-alt me-2"></i> Port System - Port Details
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Admin" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="dashboard-card">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="mb-0">{{ port.name }} Details</h3>
+            <div>
+                <a href="{% url 'manage-ports' %}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Ports
+                </a>
+                <a href="{% url 'manage-berths' %}?port_id={{ port.id }}" class="btn btn-primary">
+                    <i class="bi bi-truck me-1"></i> Manage Berths
+                </a>
+            </div>
+        </div>
+        
+        <!-- Port Location Map -->
+        <div id="portMap" class="port-map" 
+             data-latitude="{{ port.latitude|default:0 }}" 
+             data-longitude="{{ port.longitude|default:0 }}"
+             data-port-name="{{ port.name|escapejs }}"
+             data-port-country="{{ port.country|escapejs }}"></div>
+        
+        <!-- Port Information -->
+        <div class="port-info">
+            <h4 class="section-heading">Port Information</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <dl class="row">
+                        <dt class="col-sm-4">Name:</dt>
+                        <dd class="col-sm-8">{{ port.name }}</dd>
+                        
+                        <dt class="col-sm-4">Country:</dt>
+                        <dd class="col-sm-8">{{ port.country }}</dd>
+                        
+                        <dt class="col-sm-4">Status:</dt>
+                        <dd class="col-sm-8">
+                            {% if port.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row">
+                        <dt class="col-sm-4">Coordinates:</dt>
+                        <dd class="col-sm-8">{{ port.latitude }}, {{ port.longitude }}</dd>
+                        
+                        <dt class="col-sm-4">Total Berths:</dt>
+                        <dd class="col-sm-8">{{ total_berths }}</dd>
+                        
+                        <dt class="col-sm-4">Available Berths:</dt>
+                        <dd class="col-sm-8">{{ available_berths_count }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Berth Stats -->
+        <div class="berth-stats mb-4">
+            <h4 class="section-heading">Berth Statistics</h4>
+            <div class="row">
+                <!-- Berth Type Stats -->
+                <div class="col-md-7">
+                    <h5 class="mb-3">Berth Types</h5>
+                    <div class="row">
+                        {% if berth_types.container > 0 %}
+                        <div class="col-md-4 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-primary">Container</span>
+                                </div>
+                                <h5>{{ berth_types.container }}</h5>
+                                <p>berths</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if berth_types.bulk > 0 %}
+                        <div class="col-md-4 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-secondary">Bulk</span>
+                                </div>
+                                <h5>{{ berth_types.bulk }}</h5>
+                                <p>berths</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if berth_types.tanker > 0 %}
+                        <div class="col-md-4 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-info">Tanker</span>
+                                </div>
+                                <h5>{{ berth_types.tanker }}</h5>
+                                <p>berths</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if berth_types.passenger > 0 %}
+                        <div class="col-md-4 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-success">Passenger</span>
+                                </div>
+                                <h5>{{ berth_types.passenger }}</h5>
+                                <p>berths</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if berth_types.multipurpose > 0 %}
+                        <div class="col-md-4 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">Multipurpose</span>
+                                </div>
+                                <h5>{{ berth_types.multipurpose }}</h5>
+                                <p>berths</p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Berth Status Stats -->
+                <div class="col-md-5">
+                    <h5 class="mb-3">Berth Status</h5>
+                    <div class="row">
+                        <div class="col-md-6 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-success">Active</span>
+                                </div>
+                                <h5>{{ berth_statuses.active }}</h5>
+                                <p>available</p>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-info">Occupied</span>
+                                </div>
+                                <h5>{{ berth_statuses.occupied }}</h5>
+                                <p>in use</p>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-warning text-dark">Maintenance</span>
+                                </div>
+                                <h5>{{ berth_statuses.maintenance }}</h5>
+                                <p>under repair</p>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 col-6">
+                            <div class="stat-card">
+                                <div class="mb-2">
+                                    <span class="badge bg-secondary">Inactive</span>
+                                </div>
+                                <h5>{{ berth_statuses.inactive }}</h5>
+                                <p>not in service</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Berths Section -->
+        <div class="berths-section">
+            <h4 class="section-heading">
+                Berths
+                <a href="{% url 'manage-berths' %}?port_id={{ port.id }}" class="btn btn-sm btn-outline-primary float-end">
+                    <i class="bi bi-gear me-1"></i> Manage Berths
+                </a>
+            </h4>
+            
+            {% if berths %}
+                <!-- Berth Type Filter Tabs -->
+                <ul class="nav nav-pills mb-3" id="berthTypeTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="all-berths-tab" data-bs-toggle="pill" data-bs-target="#all-berths" type="button" role="tab" aria-controls="all-berths" aria-selected="true">All Berths</button>
+                    </li>
+                    {% if has_container_berths %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="container-berths-tab" data-bs-toggle="pill" data-bs-target="#container-berths" type="button" role="tab" aria-controls="container-berths" aria-selected="false">Container</button>
+                    </li>
+                    {% endif %}
+                    {% if has_bulk_berths %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="bulk-berths-tab" data-bs-toggle="pill" data-bs-target="#bulk-berths" type="button" role="tab" aria-controls="bulk-berths" aria-selected="false">Bulk</button>
+                    </li>
+                    {% endif %}
+                    {% if has_tanker_berths %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="tanker-berths-tab" data-bs-toggle="pill" data-bs-target="#tanker-berths" type="button" role="tab" aria-controls="tanker-berths" aria-selected="false">Tanker</button>
+                    </li>
+                    {% endif %}
+                    {% if has_passenger_berths %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="passenger-berths-tab" data-bs-toggle="pill" data-bs-target="#passenger-berths" type="button" role="tab" aria-controls="passenger-berths" aria-selected="false">Passenger</button>
+                    </li>
+                    {% endif %}
+                    {% if has_multipurpose_berths %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="multipurpose-berths-tab" data-bs-toggle="pill" data-bs-target="#multipurpose-berths" type="button" role="tab" aria-controls="multipurpose-berths" aria-selected="false">Multipurpose</button>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <!-- Berth Cards by Type -->
+                <div class="tab-content" id="berthTabContent">
+                    <!-- All Berths -->
+                    <div class="tab-pane fade show active" id="all-berths" role="tabpanel" aria-labelledby="all-berths-tab">
+                        <div class="row">
+                            {% for berth in berths %}
+                            <div class="col-md-4 col-sm-6">
+                                <div class="card berth-card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                        <div class="card-text">
+                                            <div class="mb-2">
+                                                {% if berth.type == 'container' %}
+                                                    <span class="badge bg-primary berth-badge">Container</span>
+                                                {% elif berth.type == 'bulk' %}
+                                                    <span class="badge bg-secondary berth-badge">Bulk</span>
+                                                {% elif berth.type == 'tanker' %}
+                                                    <span class="badge bg-info berth-badge">Tanker</span>
+                                                {% elif berth.type == 'passenger' %}
+                                                    <span class="badge bg-success berth-badge">Passenger</span>
+                                                {% elif berth.type == 'multipurpose' %}
+                                                    <span class="badge bg-warning text-dark berth-badge">Multipurpose</span>
+                                                {% endif %}
+                                                
+                                                {% if berth.status == 'active' %}
+                                                    <span class="badge bg-success berth-badge">Active</span>
+                                                {% elif berth.status == 'maintenance' %}
+                                                    <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                {% elif berth.status == 'occupied' %}
+                                                    <span class="badge bg-info berth-badge">Occupied</span>
+                                                {% elif berth.status == 'inactive' %}
+                                                    <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                {% endif %}
+                                            </div>
+                                            <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                        </div>
+                                        <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Container Berths -->
+                    {% if has_container_berths %}
+                    <div class="tab-pane fade" id="container-berths" role="tabpanel" aria-labelledby="container-berths-tab">
+                        <div class="row">
+                            {% for berth in berths %}
+                                {% if berth.type == 'container' %}
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="card berth-card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                            <div class="card-text">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-primary berth-badge">Container</span>
+                                                    
+                                                    {% if berth.status == 'active' %}
+                                                        <span class="badge bg-success berth-badge">Active</span>
+                                                    {% elif berth.status == 'maintenance' %}
+                                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                    {% elif berth.status == 'occupied' %}
+                                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                                    {% elif berth.status == 'inactive' %}
+                                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                    {% endif %}
+                                                </div>
+                                                <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                            </div>
+                                            <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Similar tab panes for other berth types -->
+                    {% if has_bulk_berths %}
+                    <div class="tab-pane fade" id="bulk-berths" role="tabpanel" aria-labelledby="bulk-berths-tab">
+                        <div class="row">
+                            {% for berth in berths %}
+                                {% if berth.type == 'bulk' %}
+                                <!-- Similar card structure as container berths -->
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="card berth-card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                            <div class="card-text">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-secondary berth-badge">Bulk</span>
+                                                    <!-- Status badge -->
+                                                    {% if berth.status == 'active' %}
+                                                        <span class="badge bg-success berth-badge">Active</span>
+                                                    {% elif berth.status == 'maintenance' %}
+                                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                    {% elif berth.status == 'occupied' %}
+                                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                                    {% elif berth.status == 'inactive' %}
+                                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                    {% endif %}
+                                                </div>
+                                                <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                            </div>
+                                            <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if has_tanker_berths %}
+                    <div class="tab-pane fade" id="tanker-berths" role="tabpanel" aria-labelledby="tanker-berths-tab">
+                        <!-- Similar structure -->
+                        <div class="row">
+                            {% for berth in berths %}
+                                {% if berth.type == 'tanker' %}
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="card berth-card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                            <div class="card-text">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-info berth-badge">Tanker</span>
+                                                    <!-- Status badge -->
+                                                    {% if berth.status == 'active' %}
+                                                        <span class="badge bg-success berth-badge">Active</span>
+                                                    {% elif berth.status == 'maintenance' %}
+                                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                    {% elif berth.status == 'occupied' %}
+                                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                                    {% elif berth.status == 'inactive' %}
+                                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                    {% endif %}
+                                                </div>
+                                                <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                            </div>
+                                            <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if has_passenger_berths %}
+                    <div class="tab-pane fade" id="passenger-berths" role="tabpanel" aria-labelledby="passenger-berths-tab">
+                        <!-- Similar structure -->
+                        <div class="row">
+                            {% for berth in berths %}
+                                {% if berth.type == 'passenger' %}
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="card berth-card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                            <div class="card-text">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-success berth-badge">Passenger</span>
+                                                    <!-- Status badge -->
+                                                    {% if berth.status == 'active' %}
+                                                        <span class="badge bg-success berth-badge">Active</span>
+                                                    {% elif berth.status == 'maintenance' %}
+                                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                    {% elif berth.status == 'occupied' %}
+                                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                                    {% elif berth.status == 'inactive' %}
+                                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                    {% endif %}
+                                                </div>
+                                                <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                            </div>
+                                            <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if has_multipurpose_berths %}
+                    <div class="tab-pane fade" id="multipurpose-berths" role="tabpanel" aria-labelledby="multipurpose-berths-tab">
+                        <!-- Similar structure -->
+                        <div class="row">
+                            {% for berth in berths %}
+                                {% if berth.type == 'multipurpose' %}
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="card berth-card">
+                                        <div class="card-body">
+                                            <h5 class="card-title">Berth {{ berth.berth_number }}</h5>
+                                            <div class="card-text">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-warning text-dark berth-badge">Multipurpose</span>
+                                                    <!-- Status badge -->
+                                                    {% if berth.status == 'active' %}
+                                                        <span class="badge bg-success berth-badge">Active</span>
+                                                    {% elif berth.status == 'maintenance' %}
+                                                        <span class="badge bg-warning text-dark berth-badge">Maintenance</span>
+                                                    {% elif berth.status == 'occupied' %}
+                                                        <span class="badge bg-info berth-badge">Occupied</span>
+                                                    {% elif berth.status == 'inactive' %}
+                                                        <span class="badge bg-secondary berth-badge">Inactive</span>
+                                                    {% endif %}
+                                                </div>
+                                                <p>Dimensions: {{ berth.length }}m × {{ berth.width }}m × {{ berth.depth }}m</p>
+                                            </div>
+                                            <a href="#" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#berthModal{{ berth.berth_id }}">View Details</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="alert alert-info text-center">
+                    No berths have been added to this port yet.
+                    <a href="{% url 'manage-berths' %}?port_id={{ port.id }}" class="btn btn-sm btn-primary ms-2">Add Berth</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Berth Detail Modals -->
+{% for berth in berths %}
+<div class="modal fade" id="berthModal{{ berth.berth_id }}" tabindex="-1" aria-labelledby="berthModalLabel{{ berth.berth_id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="berthModalLabel{{ berth.berth_id }}">Berth {{ berth.berth_number }} Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Berth ID</h6>
+                        <p>{{ berth.berth_id }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Berth Number</h6>
+                        <p>{{ berth.berth_number }}</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Type</h6>
+                        <p>
+                            {% if berth.type == 'container' %}
+                                <span class="badge bg-primary">Container</span>
+                            {% elif berth.type == 'bulk' %}
+                                <span class="badge bg-secondary">Bulk</span>
+                            {% elif berth.type == 'tanker' %}
+                                <span class="badge bg-info">Tanker</span>
+                            {% elif berth.type == 'passenger' %}
+                                <span class="badge bg-success">Passenger</span>
+                            {% elif berth.type == 'multipurpose' %}
+                                <span class="badge bg-warning text-dark">Multipurpose</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Status</h6>
+                        <p>
+                            {% if berth.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% elif berth.status == 'maintenance' %}
+                                <span class="badge bg-warning text-dark">Maintenance</span>
+                            {% elif berth.status == 'occupied' %}
+                                <span class="badge bg-info">Occupied</span>
+                            {% elif berth.status == 'inactive' %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Dimensions</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>Length:</strong> {{ berth.length }}m</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Width:</strong> {{ berth.width }}m</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Depth:</strong> {{ berth.depth }}m</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Port</h6>
+                    <p>{{ port.name }}, {{ port.country }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{% url 'manage-berths' %}?port_id={{ port.id }}" class="btn btn-primary">Edit Berth</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Initialize the map
+    document.addEventListener('DOMContentLoaded', function() {
+        const mapElement = document.getElementById('portMap');
+        const latitude = parseFloat(mapElement.dataset.latitude) || 0;
+        const longitude = parseFloat(mapElement.dataset.longitude) || 0;
+        const portName = mapElement.dataset.portName || '';
+        const portCountry = mapElement.dataset.portCountry || '';
+        
+        const portMap = L.map('portMap').setView([latitude, longitude], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(portMap);
+        
+        // Add a marker for the port
+        L.marker([latitude, longitude])
+            .addTo(portMap)
+            .bindPopup('<strong>' + portName + '</strong><br>' + portCountry)
+            .openPopup();
+    });
+</script>
+</body>
+</html>

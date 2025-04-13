@@ -178,40 +178,49 @@
                                     <span class="badge bg-secondary port-badge">Inactive</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
-                                <button type="button"
-                                    class="btn btn-outline-info btn-sm view-port-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#viewPortModal"
-                                    data-id="{{ port.id }}"
-                                    data-name="{{ port.name }}"
-                                    data-country="{{ port.country }}"
-                                    data-lat="{{ port.lat }}"
-                                    data-lng="{{ port.lng }}"
-                                    data-status="{{ port.status }}">
-                                    Details
-                                </button>
-                                <button type="button"
-                                    class="btn btn-outline-primary btn-sm edit-port-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#editPortModal"
-                                    data-id="{{ port.id }}"
-                                    data-name="{{ port.name }}"
-                                    data-country="{{ port.country }}"
-                                    data-lat="{{ port.lat }}"
-                                    data-lng="{{ port.lng }}"
-                                    data-status="{{ port.status }}">
-                                    Edit
-                                </button>
-                                <button type="button"
-                                    class="btn btn-outline-danger btn-sm delete-port-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#deletePortModal"
-                                    data-id="{{ port.id }}"
-                                    data-name="{{ port.name }}">
-                                    Delete
-                                </button>
-                            </td>
+                            <!-- Add to the actions column in the ports table -->
+<td class="text-center">
+    <button type="button"
+        class="btn btn-outline-info btn-sm view-port-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#viewPortModal"
+        data-id="{{ port.id }}"
+        data-name="{{ port.name }}"
+        data-country="{{ port.country }}"
+        data-lat="{{ port.lat }}"
+        data-lng="{{ port.lng }}"
+        data-status="{{ port.status }}">
+        Details
+    </button>
+    <a href="{% url 'port-details' port_id=port.id %}" 
+       class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-eye me-1"></i> View Port
+    </a>
+    <a href="{% url 'manage-berths' %}?port_id={{ port.id }}" 
+       class="btn btn-outline-success btn-sm">
+        <i class="bi bi-truck me-1"></i> Berths
+    </a>
+    <button type="button"
+        class="btn btn-outline-primary btn-sm edit-port-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#editPortModal"
+        data-id="{{ port.id }}"
+        data-name="{{ port.name }}"
+        data-country="{{ port.country }}"
+        data-lat="{{ port.lat }}"
+        data-lng="{{ port.lng }}"
+        data-status="{{ port.status }}">
+        Edit
+    </button>
+    <button type="button"
+        class="btn btn-outline-danger btn-sm delete-port-btn"
+        data-bs-toggle="modal"
+        data-bs-target="#deletePortModal"
+        data-id="{{ port.id }}"
+        data-name="{{ port.name }}">
+        Delete
+    </button>
+</td>
                         </tr>
                     {% empty %}
                         <tr>

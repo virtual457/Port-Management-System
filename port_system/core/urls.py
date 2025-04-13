@@ -1,6 +1,10 @@
 from django.urls import path
 from . import views
 from . import shipowner_views
+from .views.admin import *;
+from .views.shipowner.schedule_views import *;
+from .views.shipowner.schedule_management_view import *;
+from .views.admin import berth_views;
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -28,6 +32,13 @@ urlpatterns = [
     path('admin/users/edit/', views.admin_users_edit, name='edit-users'),
     path('admin/users/delete/', views.admin_users_delete, name='delete-users'),
     path('admin/users/add/', views.admin_users_add, name='add-users'),
+
+    # Port details view
+    path('admin/manage-berths/', berth_views.manage_berths, name='manage-berths'),
+    path('admin/berths/add/', berth_views.add_berth, name='add-berth'),
+    path('admin/berths/edit/', berth_views.edit_berth, name='edit-berth'),
+    path('admin/berths/delete/', berth_views.delete_berth, name='delete-berth'),
+    path('admin/ports/<int:port_id>/', port_details_view.port_details, name='port-details'),
     
 
     # Dashboards (each view checks for correct role)
@@ -58,9 +69,15 @@ urlpatterns = [
     path('shipowner/routes/delete/', shipowner_views.delete_route, name='delete-route'),
         
     # Schedules management
-    path('shipowner/schedules/', shipowner_views.manage_schedules, name='manage-schedules'),
+    path('shipowner/schedules/', manage_schedules, name='manage-schedules'),
     path('shipowner/schedules/add-page/', shipowner_views.add_schedule_page, name='add-schedule-page'),
     path('shipowner/schedules/add/', shipowner_views.add_schedule, name='add-schedule'),
     path('shipowner/schedules/edit/', shipowner_views.edit_schedule, name='edit-schedule'),
     path('shipowner/schedules/delete/', shipowner_views.delete_schedule, name='delete-schedule'),
+
+    path('shipowner/schedules/create/', create_schedule_form, name='create-schedule-form'),
+    path('shipowner/schedules/add/', create_schedule, name='create-schedule'),
+    path('shipowner/schedules/update-status/', update_schedule_status, name='update-schedule-status'),
+    path('shipowner/schedules/delete/', delete_schedule, name='delete-schedule'),
+    path('api/ports/<int:port_id>/available-berths/', get_available_berths, name='get-available-berths'),
 ]

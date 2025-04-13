@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Schedule</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .form-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1000px;
+            margin: auto;
+            width: 100%;
+        }
+        .form-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .datetime-container {
+            display: flex;
+            gap: 10px;
+        }
+        .datetime-container .form-floating {
+            flex: 1;
+        }
+        .berth-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .berth-badge {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Shipowner Menu</h5>
+    <hr class="bg-light">
+    <a href="/shipowner/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/shipowner/ships"><i class="bi bi-ship me-2"></i> Manage Ships</a>
+    <a href="/shipowner/routes"><i class="bi bi-signpost-split me-2"></i> Manage Routes</a>
+    <a href="/shipowner/schedules"><i class="bi bi-calendar-check me-2"></i> Schedules</a>
+    <a href="/shipowner/cargo-requests"><i class="bi bi-box-seam me-2"></i> Cargo Requests</a>
+    <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-calendar-plus me-2"></i> Create New Schedule
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Captain" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="form-card">
+        <h3 class="mb-4 text-center">Create New Schedule</h3>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <form id="scheduleForm" method="post" action="{% url 'create-schedule' %}">
+            {% csrf_token %}
+            
+            <!-- Basic Schedule Information -->
+            <div class="form-section">
+                <h4 class="mb-3">Basic Information</h4>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <select class="form-select" id="shipSelect" name="ship_id" required>
+                                <option value="" selected disabled>Select a ship</option>
+                                {% for ship in ships %}
+                                    <option value="{{ ship.id }}" 
+                                            data-type="{{ ship.type }}" 
+                                            data-length="{{ ship.length }}"
+                                            data-width="{{ ship.width }}"
+                                            data-draft="{{ ship.draft }}">
+                                        {{ ship.name }} ({{ ship.type|title }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <label for="shipSelect">Select Ship</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <select class="form-select" id="routeSelect" name="route_id" required>
+                                <option value="" selected disabled>Select a route</option>
+                                {% for route in routes %}
+                                    <option value="{{ route.id }}" 
+                                            data-origin-id="{{ route.origin_port_id }}"
+                                            data-origin-name="{{ route.origin_port }}"
+                                            data-destination-id="{{ route.destination_port_id }}"
+                                            data-destination-name="{{ route.destination_port }}"
+                                            data-duration="{{ route.duration }}">
+                                        {{ route.name }}: {{ route.origin_port }} to {{ route.destination_port }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <label for="routeSelect">Select Route</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="number" class="form-control" id="maxCargo" name="max_cargo" step="0.01" min="1" required>
+                            <label for="maxCargo">Max Cargo Capacity (tons/TEU)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <select class="form-select" id="scheduleStatus" name="status" required>
+                                <option value="scheduled" selected>Scheduled</option>
+                                <option value="delayed">Delayed</option>
+                            </select>
+                            <label for="scheduleStatus">Initial Status</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-floating mb-3">
+                    <textarea class="form-control" id="scheduleNotes" name="notes" style="height: 100px"></textarea>
+                    <label for="scheduleNotes">Additional Notes</label>
+                </div>
+            </div>
+            
+            <!-- Origin Port Berth Booking -->
+            <div class="form-section" id="originBerthSection">
+                <h4 class="mb-3">Origin Port Berth Booking</h4>
+                <p class="text-muted mb-3">Select berth and booking time at origin port</p>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <select class="form-select" id="originBerthSelect" name="origin_berth_id" required disabled>
+                                <option value="" selected disabled>Select origin port first</option>
+                            </select>
+                            <label for="originBerthSelect">Origin Berth</label>
+                        </div>
+                        <div id="originBerthInfo" class="berth-info" style="display: none;">
+                            <h6 class="d-flex justify-content-between">
+                                <span>Berth Details</span>
+                                <span id="originBerthType" class="berth-badge"></span>
+                            </h6>
+                            <p class="mb-1"><strong>Dimensions:</strong> <span id="originBerthDimensions"></span></p>
+                            <p class="mb-0"><strong>Status:</strong> <span id="originBerthStatus"></span></p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="datetime-container">
+                            <div class="form-floating">
+                                <input type="text" class="form-control flatpickr-datetime" id="originBerthStart" name="origin_berth_start" required>
+                                <label for="originBerthStart">Booking Start</label>
+                            </div>
+                            <div class="form-floating">
+                                <input type="text" class="form-control flatpickr-datetime" id="originBerthEnd" name="origin_berth_end" required>
+                                <label for="originBerthEnd">Booking End</label>
+                            </div>
+                        </div>
+                        <div class="form-text text-muted">
+                            Booking duration should include all loading operations before departure.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Voyage Times -->
+            <div class="form-section">
+                <h4 class="mb-3">Voyage Times</h4>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control flatpickr-datetime" id="departureDate" name="departure_date" required>
+                            <label for="departureDate">Departure Date & Time</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <input type="text" class="form-control flatpickr-datetime" id="arrivalDate" name="arrival_date" required>
+                            <label for="arrivalDate">Arrival Date & Time</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-text mb-3">
+                    <strong>Estimated voyage duration: </strong><span id="voyageDuration">N/A</span>
+                </div>
+            </div>
+            
+            <!-- Destination Port Berth Booking -->
+            <div class="form-section" id="destinationBerthSection">
+                <h4 class="mb-3">Destination Port Berth Booking</h4>
+                <p class="text-muted mb-3">Select berth and booking time at destination port</p>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-floating">
+                            <select class="form-select" id="destinationBerthSelect" name="destination_berth_id" required disabled>
+                                <option value="" selected disabled>Select destination port first</option>
+                            </select>
+                            <label for="destinationBerthSelect">Destination Berth</label>
+                        </div>
+                        <div id="destinationBerthInfo" class="berth-info" style="display: none;">
+                            <h6 class="d-flex justify-content-between">
+                                <span>Berth Details</span>
+                                <span id="destinationBerthType" class="berth-badge"></span>
+                            </h6>
+                            <p class="mb-1"><strong>Dimensions:</strong> <span id="destinationBerthDimensions"></span></p>
+                            <p class="mb-0"><strong>Status:</strong> <span id="destinationBerthStatus"></span></p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="datetime-container">
+                            <div class="form-floating">
+                                <input type="text" class="form-control flatpickr-datetime" id="destinationBerthStart" name="destination_berth_start" required>
+                                <label for="destinationBerthStart">Booking Start</label>
+                            </div>
+                            <div class="form-floating">
+                                <input type="text" class="form-control flatpickr-datetime" id="destinationBerthEnd" name="destination_berth_end" required>
+                                <label for="destinationBerthEnd">Booking End</label>
+                            </div>
+                        </div>
+                        <div class="form-text text-muted">
+                            Booking duration should include all unloading operations after arrival.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{% url 'manage-schedules' %}" class="btn btn-outline-secondary me-md-2">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Schedule</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Initialize datetime pickers
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize flatpickr for all datetime inputs
+        const datetimePickers = document.querySelectorAll('.flatpickr-datetime');
+        datetimePickers.forEach(picker => {
+            flatpickr(picker, {
+                enableTime: true,
+                dateFormat: "Y-m-d H:i",
+                time_24hr: true,
+                minDate: "today"
+            });
+        });
+        
+        // Ship select change handler
+        const shipSelect = document.getElementById('shipSelect');
+        shipSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const shipType = selectedOption.getAttribute('data-type');
+            const shipLength = selectedOption.getAttribute('data-length');
+            const shipWidth = selectedOption.getAttribute('data-width');
+            const shipDraft = selectedOption.getAttribute('data-draft');
+            
+            // Update available cargo based on ship type and capacity
+            const maxCargoInput = document.getElementById('maxCargo');
+            if (shipType === 'container') {
+                maxCargoInput.placeholder = "Enter max TEU capacity";
+            } else {
+                maxCargoInput.placeholder = "Enter max tonnage";
+            }
+            
+            // Update available berths based on ship dimensions
+            updateAvailableBerths();
+        });
+        
+        // Route select change handler
+        const routeSelect = document.getElementById('routeSelect');
+        routeSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const originPortId = selectedOption.getAttribute('data-origin-id');
+            const originPortName = selectedOption.getAttribute('data-origin-name');
+            const destinationPortId = selectedOption.getAttribute('data-destination-id');
+            const destinationPortName = selectedOption.getAttribute('data-destination-name');
+            const routeDuration = selectedOption.getAttribute('data-duration');
+            
+            // Update voyage duration estimate
+            document.getElementById('voyageDuration').textContent = routeDuration + ' days';
+            
+            // Enable berth selectors
+            document.getElementById('originBerthSelect').disabled = false;
+            document.getElementById('destinationBerthSelect').disabled = false;
+            
+            // Populate berth options
+            fetchBerthsForPort(originPortId, 'origin');
+            fetchBerthsForPort(destinationPortId, 'destination');
+            
+            // Calculate suggested arrival date based on departure and route duration
+            const departureDateInput = document.getElementById('departureDate');
+            const arrivalDateInput = document.getElementById('arrivalDate');
+            
+            departureDateInput.addEventListener('change', function() {
+                if (this.value && routeDuration) {
+                    const departureDate = new Date(this.value);
+                    const arrivalDate = new Date(departureDate);
+                    arrivalDate.setDate(departureDate.getDate() + parseFloat(routeDuration));
+                    
+                    // Format for flatpickr
+                    const year = arrivalDate.getFullYear();
+                    const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(arrivalDate.getDate()).padStart(2, '0');
+                    const hours = String(arrivalDate.getHours()).padStart(2, '0');
+                    const minutes = String(arrivalDate.getMinutes()).padStart(2, '0');
+                    
+                    arrivalDateInput._flatpickr.setDate(`${year}-${month}-${day} ${hours}:${minutes}`);
+                    
+                    // Update suggested berth booking times
+                    updateBerthBookingTimes();
+                }
+            });
+        });
+        
+        // Berth select change handlers
+        document.getElementById('originBerthSelect').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const berthType = selectedOption.getAttribute('data-type');
+                const berthLength = selectedOption.getAttribute('data-length');
+                const berthWidth = selectedOption.getAttribute('data-width');
+                const berthDepth = selectedOption.getAttribute('data-depth');
+                const berthStatus = selectedOption.getAttribute('data-status');
+                
+                // Show berth info
+                document.getElementById('originBerthInfo').style.display = 'block';
+                
+                // Update berth type badge
+                const berthTypeBadge = document.getElementById('originBerthType');
+                berthTypeBadge.textContent = berthType.charAt(0).toUpperCase() + berthType.slice(1);
+                
+                // Set badge color based on berth type
+                berthTypeBadge.className = 'berth-badge';
+                switch(berthType) {
+                    case 'container':
+                        berthTypeBadge.classList.add('bg-primary');
+                        break;
+                    case 'bulk':
+                        berthTypeBadge.classList.add('bg-secondary');
+                        break;
+                    case 'tanker':
+                        berthTypeBadge.classList.add('bg-info');
+                        break;
+                    case 'passenger':
+                        berthTypeBadge.classList.add('bg-success');
+                        break;
+                    case 'multipurpose':
+                        berthTypeBadge.classList.add('bg-warning', 'text-dark');
+                        break;
+                }
+                
+                // Update dimensions and status
+                document.getElementById('originBerthDimensions').textContent = 
+                    `${berthLength}m × ${berthWidth}m × ${berthDepth}m`;
+                
+                const statusSpan = document.getElementById('originBerthStatus');
+                statusSpan.textContent = berthStatus.charAt(0).toUpperCase() + berthStatus.slice(1);
+                
+                // Set status badge color
+                statusSpan.className = '';
+                switch(berthStatus) {
+                    case 'active':
+                        statusSpan.classList.add('badge', 'bg-success');
+                        break;
+                    case 'maintenance':
+                        statusSpan.classList.add('badge', 'bg-warning', 'text-dark');
+                        break;
+                    case 'inactive':
+                        statusSpan.classList.add('badge', 'bg-secondary');
+                        break;
+                }
+                
+                // Check berth availability for the selected times
+                checkBerthAvailability('origin');
+            }
+        });
+        
+        document.getElementById('destinationBerthSelect').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const berthType = selectedOption.getAttribute('data-type');
+                const berthLength = selectedOption.getAttribute('data-length');
+                const berthWidth = selectedOption.getAttribute('data-width');
+                const berthDepth = selectedOption.getAttribute('data-depth');
+                const berthStatus = selectedOption.getAttribute('data-status');
+                
+                // Show berth info
+                document.getElementById('destinationBerthInfo').style.display = 'block';
+                
+                // Update berth type badge
+                const berthTypeBadge = document.getElementById('destinationBerthType');
+                berthTypeBadge.textContent = berthType.charAt(0).toUpperCase() + berthType.slice(1);
+                
+                // Set badge color based on berth type
+                berthTypeBadge.className = 'berth-badge';
+                switch(berthType) {
+                    case 'container':
+                        berthTypeBadge.classList.add('bg-primary');
+                        break;
+                    case 'bulk':
+                        berthTypeBadge.classList.add('bg-secondary');
+                        break;
+                    case 'tanker':
+                        berthTypeBadge.classList.add('bg-info');
+                        break;
+                    case 'passenger':
+                        berthTypeBadge.classList.add('bg-success');
+                        break;
+                    case 'multipurpose':
+                        berthTypeBadge.classList.add('bg-warning', 'text-dark');
+                        break;
+                }
+                
+                // Update dimensions and status
+                document.getElementById('destinationBerthDimensions').textContent = 
+                    `${berthLength}m × ${berthWidth}m × ${berthDepth}m`;
+                
+                const statusSpan = document.getElementById('destinationBerthStatus');
+                statusSpan.textContent = berthStatus.charAt(0).toUpperCase() + berthStatus.slice(1);
+                
+                // Set status badge color
+                statusSpan.className = '';
+                switch(berthStatus) {
+                    case 'active':
+                        statusSpan.classList.add('badge', 'bg-success');
+                        break;
+                    case 'maintenance':
+                        statusSpan.classList.add('badge', 'bg-warning', 'text-dark');
+                        break;
+                    case 'inactive':
+                        statusSpan.classList.add('badge', 'bg-secondary');
+                        break;
+                }
+                
+                // Check berth availability for the selected times
+                checkBerthAvailability('destination');
+            }
+        });
+        
+        // Berth time selection handlers
+        document.getElementById('originBerthStart').addEventListener('change', function() {
+            checkBerthAvailability('origin');
+        });
+        
+        document.getElementById('originBerthEnd').addEventListener('change', function() {
+            checkBerthAvailability('origin');
+        });
+        
+        document.getElementById('destinationBerthStart').addEventListener('change', function() {
+            checkBerthAvailability('destination');
+        });
+        
+        document.getElementById('destinationBerthEnd').addEventListener('change', function() {
+            checkBerthAvailability('destination');
+        });
+    });
+    
+    // Function to fetch berths for a selected port
+    function fetchBerthsForPort(portId, portType) {
+        // In a real implementation, this would be an AJAX call to your server
+        // For now, we'll simulate with dummy data
+        
+        // Get ship type to filter compatible berths
+        const shipSelect = document.getElementById('shipSelect');
+        const selectedShipOption = shipSelect.options[shipSelect.selectedIndex];
+        const shipType = selectedShipOption.getAttribute('data-type');
+        
+        // Clear existing options
+        const berthSelect = document.getElementById(`${portType}BerthSelect`);
+        berthSelect.innerHTML = '<option value="" selected disabled>Select a berth</option>';
+        
+        // Fetch berths from server (simulated)
+        // In real implementation, make an AJAX call like:
+        // fetch(`/api/ports/${portId}/berths?ship_type=${shipType}`)
+        //   .then(response => response.json())
+        //   .then(berths => { ... })
+        
+        // Dummy data for demo
+        const dummyBerths = [
+            { id: 1, berth_number: 'B01', type: 'container', length: 350, width: 45, depth: 15.5, status: 'active' },
+            { id: 2, berth_number: 'B02', type: 'container', length: 400, width: 50, depth: 16, status: 'active' },
+            { id: 3, berth_number: 'B03', type: 'bulk', length: 280, width: 40, depth: 14, status: 'active' },
+            { id: 4, berth_number: 'B04', type: 'tanker', length: 320, width: 45, depth: 18, status: 'maintenance' }
+        ];
+        
+        // Filter berths that match ship type
+        let compatibleBerths = dummyBerths;
+        if (shipType === 'container') {
+            compatibleBerths = dummyBerths.filter(berth => berth.type === 'container' || berth.type === 'multipurpose');
+        } else if (shipType === 'bulk') {
+            compatibleBerths = dummyBerths.filter(berth => berth.type === 'bulk' || berth.type === 'multipurpose');
+        } else if (shipType === 'tanker') {
+            compatibleBerths = dummyBerths.filter(berth => berth.type === 'tanker');
+        }
+        
+        // Add options to select
+        compatibleBerths.forEach(berth => {
+            const option = document.createElement('option');
+            option.value = berth.id;
+            option.textContent = `${berth.berth_number} (${berth.type})`;
+            option.setAttribute('data-type', berth.type);
+            option.setAttribute('data-length', berth.length);
+            option.setAttribute('data-width', berth.width);
+            option.setAttribute('data-depth', berth.depth);
+            option.setAttribute('data-status', berth.status);
+            
+            // Disable options that are in maintenance or inactive
+            if (berth.status !== 'active') {
+                option.disabled = true;
+                option.textContent += ` - ${berth.status}`;
+            }
+            
+            berthSelect.appendChild(option);
+        });
+    }
+    
+    // Function to update berth booking times based on departure/arrival
+    function updateBerthBookingTimes() {
+        const departureDate = new Date(document.getElementById('departureDate').value);
+        const arrivalDate = new Date(document.getElementById('arrivalDate').value);
+        
+        if (departureDate) {
+            // Suggest origin berth booking times (6 hours before to 1 hour after departure)
+            const originStart = new Date(departureDate);
+            originStart.setHours(departureDate.getHours() - 6);
+            
+            const originEnd = new Date(departureDate);
+            originEnd.setHours(departureDate.getHours() + 1);
+            
+            // Format for flatpickr
+            const formatDateTime = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${year}-${month}-${day} ${hours}:${minutes}`;
+            };
+            
+            document.getElementById('originBerthStart')._flatpickr.setDate(formatDateTime(originStart));
+            document.getElementById('originBerthEnd')._flatpickr.setDate(formatDateTime(originEnd));
+        }
+        
+        if (arrivalDate) {
+            // Suggest destination berth booking times (1 hour before to 12 hours after arrival)
+            const destinationStart = new Date(arrivalDate);
+            destinationStart.setHours(arrivalDate.getHours() - 1);
+            
+            const destinationEnd = new Date(arrivalDate);
+            destinationEnd.setHours(arrivalDate.getHours() + 12);
+            
+            // Format for flatpickr
+            const formatDateTime = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                return `${year}-${month}-${day} ${hours}:${minutes}`;
+            };
+            
+            document.getElementById('destinationBerthStart')._flatpickr.setDate(formatDateTime(destinationStart));
+            document.getElementById('destinationBerthEnd')._flatpickr.setDate(formatDateTime(destinationEnd));
+        }
+    }
+    
+    // Function to check berth availability
+    function checkBerthAvailability(portType) {
+        const berthSelect = document.getElementById(`${portType}BerthSelect`);
+        const startInput = document.getElementById(`${portType}BerthStart`);
+        const endInput = document.getElementById(`${portType}BerthEnd`);
+        
+        if (!berthSelect.value || !startInput.value || !endInput.value) {
+            return; // Not all values are set yet
+        }
+        
+        const berthId = berthSelect.value;
+        const startTime = new Date(startInput.value).toISOString();
+        const endTime = new Date(endInput.value).toISOString();
+        
+        // In a real implementation, make an AJAX call to check availability
+        // fetch(`/api/berths/${berthId}/check-availability?start=${startTime}&end=${endTime}`)
+        //   .then(response => response.json())
+        //   .then(data => { ... })
+        
+        // For demo, we'll simulate a response
+        const isAvailable = Math.random() > 0.3; // 70% chance of availability
+        
+        // Show feedback to user
+        const infoDiv = document.getElementById(`${portType}BerthInfo`);
+        const existingAlert = infoDiv.querySelector('.alert');
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert ${isAvailable ? 'alert-success' : 'alert-danger'} mt-2 mb-0`;
+        alertDiv.innerHTML = isAvailable ? 
+            '<i class="bi bi-check-circle me-2"></i>Berth is available for the selected time period' : 
+            '<i class="bi bi-exclamation-triangle me-2"></i>Berth is not available for the selected time period';
+        
+        infoDiv.appendChild(alertDiv);
+    }
+</script>
+</body>
+</html>

@@ -86,11 +86,101 @@
             padding: 4px 8px;
             border-radius: 20px;
         }
+        .berth-badge {
+            font-size: 11px;
+            padding: 3px 6px;
+            border-radius: 20px;
+        }
         .nav-pills .nav-link.active {
             background-color: #343a40;
         }
         .table-responsive {
             overflow-x: auto;
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 25px;
+            margin-bottom: 15px;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 2px;
+            background-color: #dee2e6;
+        }
+        .timeline-item:last-child::before {
+            height: 15px;
+        }
+        .timeline-item:first-child::before {
+            top: 15px;
+            height: calc(100% - 15px);
+        }
+        .timeline-marker {
+            position: absolute;
+            left: -5px;
+            top: 15px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #343a40;
+        }
+        .current-status {
+            background-color: #ffc107;
+            transform: scale(1.2);
+        }
+        .datetime-range {
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        .filter-form .form-control, .filter-form .form-select {
+            min-height: 40px;
+        }
+        .card-counter {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            padding: 20px 10px;
+            background-color: #fff;
+            height: 100%;
+            border-radius: 5px;
+            transition: .3s linear all;
+        }
+        .card-counter:hover {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+        .card-counter i {
+            font-size: 4em;
+            opacity: 0.3;
+        }
+        .card-counter .count-numbers {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 28px;
+            display: block;
+        }
+        .card-counter .count-name {
+            position: absolute;
+            right: 20px;
+            bottom: 20px;
+            font-style: italic;
+            text-transform: capitalize;
+            opacity: 0.7;
+            display: block;
+        }
+        .primary {
+            color: #3b5998;
+        }
+        .warning {
+            color: #ff9800;
+        }
+        .success {
+            color: #00C851;
+        }
+        .info {
+            color: #0099CC;
         }
     </style>
 </head>
@@ -112,7 +202,7 @@
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
         <a class="navbar-brand mb-0" href="#">
-            <i class="bi bi-ship me-2"></i> Shipowner Portal
+            <i class="bi bi-calendar-check me-2"></i> Schedule Management
         </a>
         <div class="d-flex ms-auto align-items-center">
             <span class="me-3">Hello, <strong>{{ username|default:"Captain" }}</strong></span>
@@ -126,9 +216,41 @@
     <div class="dashboard-card">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h3 class="mb-0">Manage Schedules</h3>
-            <a href="{% url 'add-schedule-page' %}" class="btn btn-success">
-                <i class="bi bi-plus-circle me-1"></i> Add New Schedule
+            <a href="{% url 'create-schedule-form' %}" class="btn btn-success">
+                <i class="bi bi-plus-circle me-1"></i> Create New Schedule
             </a>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card-counter primary">
+                    <i class="bi bi-calendar-range"></i>
+                    <span class="count-numbers">{{ scheduled_count|default:"12" }}</span>
+                    <span class="count-name">Scheduled</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card-counter info">
+                    <i class="bi bi-hourglass-split"></i>
+                    <span class="count-numbers">{{ in_progress_count|default:"5" }}</span>
+                    <span class="count-name">In Progress</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card-counter success">
+                    <i class="bi bi-check-circle"></i>
+                    <span class="count-numbers">{{ completed_count|default:"28" }}</span>
+                    <span class="count-name">Completed</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card-counter warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span class="count-numbers">{{ issues_count|default:"3" }}</span>
+                    <span class="count-name">Issues</span>
+                </div>
+            </div>
         </div>
 
         <!-- Messages/Alerts section -->
@@ -142,48 +264,63 @@
         {% endif %}
 
         <!-- Filter Schedules -->
-        <form method="get" class="mb-4">
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <div class="form-floating">
-                        <input type="text" name="ship_name" value="{{ request.GET.ship_name }}" class="form-control" id="shipNameFilter" placeholder="Filter by ship name">
-                        <label for="shipNameFilter">Ship Name</label>
-                    </div>
+        <form method="get" class="mb-4 filter-form">
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Filter Schedules</h5>
                 </div>
-                <div class="col-md-3">
-                    <div class="form-floating">
-                        <input type="text" name="port_name" value="{{ request.GET.port_name }}" class="form-control" id="portNameFilter" placeholder="Filter by port name">
-                        <label for="portNameFilter">Origin/Destination Port</label>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" name="ship_name" value="{{ request.GET.ship_name }}" class="form-control" id="shipNameFilter" placeholder="Filter by ship name">
+                                <label for="shipNameFilter">Ship Name</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" name="port_name" value="{{ request.GET.port_name }}" class="form-control" id="portNameFilter" placeholder="Filter by port name">
+                                <label for="portNameFilter">Origin/Destination Port</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <select name="status" class="form-select" id="statusFilter">
+                                    <option value="">All Statuses</option>
+                                    <option value="scheduled" {% if request.GET.status == 'scheduled' %}selected{% endif %}>Scheduled</option>
+                                    <option value="in_progress" {% if request.GET.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                    <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>Completed</option>
+                                    <option value="delayed" {% if request.GET.status == 'delayed' %}selected{% endif %}>Delayed</option>
+                                    <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                                </select>
+                                <label for="statusFilter">Status</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" name="berth_number" value="{{ request.GET.berth_number }}" class="form-control" id="berthNumberFilter" placeholder="Filter by berth number">
+                                <label for="berthNumberFilter">Berth Number</label>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <select name="status" class="form-select" id="statusFilter">
-                            <option value="">All Statuses</option>
-                            {% for status in statuses %}
-                                <option value="{{ status }}" {% if request.GET.status == status %}selected{% endif %}>{{ status|title }}</option>
-                            {% endfor %}
-                        </select>
-                        <label for="statusFilter">Status</label>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" name="date_from" value="{{ request.GET.date_from }}" class="form-control date-picker" id="dateFrom" placeholder="From date">
+                                <label for="dateFrom">From Date</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-floating">
+                                <input type="text" name="date_to" value="{{ request.GET.date_to }}" class="form-control date-picker" id="dateTo" placeholder="To date">
+                                <label for="dateTo">To Date</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-center justify-content-end">
+                            <a href="{% url 'manage-schedules' %}" class="btn btn-outline-secondary me-2">Reset Filters</a>
+                            <button class="btn btn-primary" type="submit">Apply Filters</button>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <input type="text" name="date_from" value="{{ request.GET.date_from }}" class="form-control date-picker" id="dateFrom" placeholder="From date">
-                        <label for="dateFrom">From Date</label>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-floating">
-                        <input type="text" name="date_to" value="{{ request.GET.date_to }}" class="form-control date-picker" id="dateTo" placeholder="To date">
-                        <label for="dateTo">To Date</label>
-                    </div>
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-12 text-end">
-                    <a href="{% url 'manage-schedules' %}" class="btn btn-outline-secondary me-2">Reset Filters</a>
-                    <button class="btn btn-primary" type="submit">Apply Filters</button>
                 </div>
             </div>
         </form>
@@ -202,6 +339,9 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-schedules" type="button" role="tab" aria-controls="completed-schedules" aria-selected="false">Completed</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="issues-tab" data-bs-toggle="pill" data-bs-target="#issues-schedules" type="button" role="tab" aria-controls="issues-schedules" aria-selected="false">Issues</button>
+            </li>
         </ul>
 
         <!-- Schedule Tab Content -->
@@ -215,8 +355,9 @@
                                 <th>Route</th>
                                 <th>Departure</th>
                                 <th>Arrival</th>
+                                <th>Origin Berth</th>
+                                <th>Destination Berth</th>
                                 <th>Status</th>
-                                <th>Cargo Capacity</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
@@ -227,6 +368,30 @@
                                     <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
                                     <td>{{ schedule.departure_date }}</td>
                                     <td>{{ schedule.arrival_date }}</td>
+                                    <td>
+                                        {% if schedule.origin_berth_number %}
+                                            <span class="badge {% if schedule.origin_berth_type == 'container' %}bg-primary{% elif schedule.origin_berth_type == 'bulk' %}bg-secondary{% elif schedule.origin_berth_type == 'tanker' %}bg-info{% elif schedule.origin_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                {{ schedule.origin_berth_number }}
+                                            </span>
+                                            <div class="small text-muted">
+                                                {{ schedule.origin_berth_start|date:"M d, H:i" }} - {{ schedule.origin_berth_end|date:"M d, H:i" }}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if schedule.destination_berth_number %}
+                                            <span class="badge {% if schedule.destination_berth_type == 'container' %}bg-primary{% elif schedule.destination_berth_type == 'bulk' %}bg-secondary{% elif schedule.destination_berth_type == 'tanker' %}bg-info{% elif schedule.destination_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                {{ schedule.destination_berth_number }}
+                                            </span>
+                                            <div class="small text-muted">
+                                                {{ schedule.destination_berth_start|date:"M d, H:i" }} - {{ schedule.destination_berth_end|date:"M d, H:i" }}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if schedule.status == 'scheduled' %}
                                             <span class="badge bg-primary schedule-badge">Scheduled</span>
@@ -242,7 +407,6 @@
                                             <span class="badge bg-light text-dark schedule-badge">{{ schedule.status|title }}</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ schedule.max_cargo|default:"0" }} kg</td>
                                     <td class="text-center">
                                         <button type="button"
                                             class="btn btn-outline-info btn-sm view-schedule-btn"
@@ -256,30 +420,34 @@
                                             data-destination="{{ schedule.destination_port }}"
                                             data-departure="{{ schedule.departure_date }}"
                                             data-arrival="{{ schedule.arrival_date }}"
-                                            data-actual-departure="{{ schedule.actual_departure }}"
-                                            data-actual-arrival="{{ schedule.actual_arrival }}"
+                                            data-origin-berth="{{ schedule.origin_berth_number }}"
+                                            data-origin-berth-type="{{ schedule.origin_berth_type }}"
+                                            data-origin-berth-start="{{ schedule.origin_berth_start }}"
+                                            data-origin-berth-end="{{ schedule.origin_berth_end }}"
+                                            data-destination-berth="{{ schedule.destination_berth_number }}"
+                                            data-destination-berth-type="{{ schedule.destination_berth_type }}"
+                                            data-destination-berth-start="{{ schedule.destination_berth_start }}"
+                                            data-destination-berth-end="{{ schedule.destination_berth_end }}"
                                             data-status="{{ schedule.status }}"
                                             data-max-cargo="{{ schedule.max_cargo }}"
-                                            data-distance="{{ schedule.distance }}"
-                                            data-duration="{{ schedule.duration }}"
                                             data-notes="{{ schedule.notes|default:'' }}">
-                                            Details
+                                            <i class="bi bi-eye"></i>
                                         </button>
                                         <button type="button"
                                             class="btn btn-outline-primary btn-sm edit-schedule-btn"
                                             data-bs-toggle="modal"
                                             data-bs-target="#editScheduleModal"
+                                            data-id="{{ schedule.id }}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button type="button"
+                                            class="btn btn-outline-warning btn-sm update-status-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#updateStatusModal"
                                             data-id="{{ schedule.id }}"
-                                            data-ship-id="{{ schedule.ship_id }}"
-                                            data-route-id="{{ schedule.route_id }}"
-                                            data-departure="{{ schedule.departure_date }}"
-                                            data-arrival="{{ schedule.arrival_date }}"
-                                            data-actual-departure="{{ schedule.actual_departure }}"
-                                            data-actual-arrival="{{ schedule.actual_arrival }}"
-                                            data-status="{{ schedule.status }}"
-                                            data-max-cargo="{{ schedule.max_cargo }}"
-                                            data-notes="{{ schedule.notes|default:'' }}">
-                                            Edit
+                                            data-ship-name="{{ schedule.ship_name }}"
+                                            data-current-status="{{ schedule.status }}">
+                                            <i class="bi bi-arrow-clockwise"></i>
                                         </button>
                                         <button type="button"
                                             class="btn btn-outline-danger btn-sm delete-schedule-btn"
@@ -287,13 +455,13 @@
                                             data-bs-target="#deleteScheduleModal"
                                             data-id="{{ schedule.id }}"
                                             data-ship-name="{{ schedule.ship_name }}">
-                                            Delete
+                                            <i class="bi bi-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">No schedules found. Your ships are anchored with nowhere to go! 🚢</td>
+                                    <td colspan="8" class="text-center text-muted">No schedules found. Your ships are anchored with nowhere to go! 🚢</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -301,49 +469,71 @@
                 </div>
             </div>
             
+            <!-- Other tabs have similar content structure, just filtered differently -->
             <div class="tab-pane fade" id="upcoming-schedules" role="tabpanel" aria-labelledby="upcoming-tab">
-                <!-- Similar table structure for upcoming schedules only -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
+                        <!-- Table headers same as above -->
                         <thead class="table-dark">
                             <tr>
                                 <th>Ship</th>
                                 <th>Route</th>
                                 <th>Departure</th>
                                 <th>Arrival</th>
+                                <th>Origin Berth</th>
+                                <th>Destination Berth</th>
                                 <th>Status</th>
-                                <th>Cargo Capacity</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
+                            <!-- Filter to show only upcoming schedules -->
                             {% for schedule in schedules %}
-                                {% if schedule.status == 'scheduled' or schedule.status == 'delayed' %}
-                                    <!-- Show only upcoming schedules -->
+                                {% if schedule.status == 'scheduled' %}
                                     <tr>
+                                        <!-- Same row content as above -->
                                         <td>{{ schedule.ship_name }}</td>
                                         <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
                                         <td>{{ schedule.departure_date }}</td>
                                         <td>{{ schedule.arrival_date }}</td>
                                         <td>
-                                            {% if schedule.status == 'scheduled' %}
-                                                <span class="badge bg-primary schedule-badge">Scheduled</span>
-                                            {% elif schedule.status == 'delayed' %}
-                                                <span class="badge bg-warning text-dark schedule-badge">Delayed</span>
+                                            {% if schedule.origin_berth_number %}
+                                                <span class="badge {% if schedule.origin_berth_type == 'container' %}bg-primary{% elif schedule.origin_berth_type == 'bulk' %}bg-secondary{% elif schedule.origin_berth_type == 'tanker' %}bg-info{% elif schedule.origin_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.origin_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.origin_berth_start|date:"M d, H:i" }} - {{ schedule.origin_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ schedule.max_cargo|default:"0" }} kg</td>
+                                        <td>
+                                            {% if schedule.destination_berth_number %}
+                                                <span class="badge {% if schedule.destination_berth_type == 'container' %}bg-primary{% elif schedule.destination_berth_type == 'bulk' %}bg-secondary{% elif schedule.destination_berth_type == 'tanker' %}bg-info{% elif schedule.destination_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.destination_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.destination_berth_start|date:"M d, H:i" }} - {{ schedule.destination_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary schedule-badge">Scheduled</span>
+                                        </td>
                                         <td class="text-center">
-                                            <!-- Actions buttons (same as in "All" tab) -->
-                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}">Details</button>
-                                            <button type="button" class="btn btn-outline-primary btn-sm edit-schedule-btn" data-bs-toggle="modal" data-bs-target="#editScheduleModal" data-id="{{ schedule.id }}">Edit</button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}">Delete</button>
+                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-eye"></i></button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm edit-schedule-btn" data-bs-toggle="modal" data-bs-target="#editScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-outline-warning btn-sm update-status-btn" data-bs-toggle="modal" data-bs-target="#updateStatusModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}" data-current-status="{{ schedule.status }}"><i class="bi bi-arrow-clockwise"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}"><i class="bi bi-trash"></i></button>
                                         </td>
                                     </tr>
                                 {% endif %}
                             {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">No upcoming schedules found.</td>
+                                    <td colspan="8" class="text-center text-muted">No upcoming schedules found.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -352,7 +542,7 @@
             </div>
             
             <div class="tab-pane fade" id="in-progress-schedules" role="tabpanel" aria-labelledby="in-progress-tab">
-                <!-- Similar table structure for in-progress schedules only -->
+                <!-- Similar structure for in-progress schedules -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
@@ -361,35 +551,763 @@
                                 <th>Route</th>
                                 <th>Departure</th>
                                 <th>Arrival</th>
-                                <th>Actual Departure</th>
-                                <th>Cargo Capacity</th>
+                                <th>Origin Berth</th>
+                                <th>Destination Berth</th>
+                                <th>Status</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for schedule in schedules %}
                                 {% if schedule.status == 'in_progress' %}
-                                    <!-- Show only in-progress schedules -->
                                     <tr>
                                         <td>{{ schedule.ship_name }}</td>
                                         <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
                                         <td>{{ schedule.departure_date }}</td>
                                         <td>{{ schedule.arrival_date }}</td>
-                                        <td>{{ schedule.actual_departure|default:"-" }}</td>
-                                        <td>{{ schedule.max_cargo|default:"0" }} kg</td>
+                                        <td>
+                                            {% if schedule.origin_berth_number %}
+                                                <span class="badge {% if schedule.origin_berth_type == 'container' %}bg-primary{% elif schedule.origin_berth_type == 'bulk' %}bg-secondary{% elif schedule.origin_berth_type == 'tanker' %}bg-info{% elif schedule.origin_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.origin_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.origin_berth_start|date:"M d, H:i" }} - {{ schedule.origin_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if schedule.destination_berth_number %}
+                                                <span class="badge {% if schedule.destination_berth_type == 'container' %}bg-primary{% elif schedule.destination_berth_type == 'bulk' %}bg-secondary{% elif schedule.destination_berth_type == 'tanker' %}bg-info{% elif schedule.destination_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.destination_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.destination_berth_start|date:"M d, H:i" }} - {{ schedule.destination_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info schedule-badge">In Progress</span>
+                                        </td>
                                         <td class="text-center">
-                                            <!-- Actions buttons (same as in "All" tab) -->
-                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}">Details</button>
-                                            <button type="button" class="btn btn-outline-primary btn-sm edit-schedule-btn" data-bs-toggle="modal" data-bs-target="#editScheduleModal" data-id="{{ schedule.id }}">Edit</button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}">Delete</button>
+                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-eye"></i></button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm edit-schedule-btn" data-bs-toggle="modal" data-bs-target="#editScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-outline-warning btn-sm update-status-btn" data-bs-toggle="modal" data-bs-target="#updateStatusModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}" data-current-status="{{ schedule.status }}"><i class="bi bi-arrow-clockwise"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}"><i class="bi bi-trash"></i></button>
                                         </td>
                                     </tr>
                                 {% endif %}
                             {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted">No voyages currently in progress.</td>
+                                    <td colspan="8" class="text-center text-muted">No voyages currently in progress.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+            </div>
+            
+            <div class="tab-pane fade" id="completed-schedules" role="tabpanel" aria-labelledby="completed-tab">
+                <!-- Similar structure for completed schedules -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Ship</th>
+                                <th>Route</th>
+                                <th>Departure</th>
+                                <th>Arrival</th>
+                                <th>Origin Berth</th>
+                                <th>Destination Berth</th>
+                                <th>Status</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in schedules %}
+                                {% if schedule.status == 'completed' %}
+                                    <tr>
+                                        <td>{{ schedule.ship_name }}</td>
+                                        <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
+                                        <td>{{ schedule.departure_date }}</td>
+                                        <td>{{ schedule.arrival_date }}</td>
+                                        <td>
+                                            {% if schedule.origin_berth_number %}
+                                                <span class="badge {% if schedule.origin_berth_type == 'container' %}bg-primary{% elif schedule.origin_berth_type == 'bulk' %}bg-secondary{% elif schedule.origin_berth_type == 'tanker' %}bg-info{% elif schedule.origin_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.origin_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.origin_berth_start|date:"M d, H:i" }} - {{ schedule.origin_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if schedule.destination_berth_number %}
+                                                <span class="badge {% if schedule.destination_berth_type == 'container' %}bg-primary{% elif schedule.destination_berth_type == 'bulk' %}bg-secondary{% elif schedule.destination_berth_type == 'tanker' %}bg-info{% elif schedule.destination_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.destination_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.destination_berth_start|date:"M d, H:i" }} - {{ schedule.destination_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success schedule-badge">Completed</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-eye"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No completed schedules found.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="issues-schedules" role="tabpanel" aria-labelledby="issues-tab">
+                <!-- Showing delayed or cancelled schedules -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Ship</th>
+                                <th>Route</th>
+                                <th>Departure</th>
+                                <th>Arrival</th>
+                                <th>Origin Berth</th>
+                                <th>Destination Berth</th>
+                                <th>Status</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in schedules %}
+                                {% if schedule.status == 'delayed' or schedule.status == 'cancelled' %}
+                                    <tr>
+                                        <td>{{ schedule.ship_name }}</td>
+                                        <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
+                                        <td>{{ schedule.departure_date }}</td>
+                                        <td>{{ schedule.arrival_date }}</td>
+                                        <td>
+                                            {% if schedule.origin_berth_number %}
+                                                <span class="badge {% if schedule.origin_berth_type == 'container' %}bg-primary{% elif schedule.origin_berth_type == 'bulk' %}bg-secondary{% elif schedule.origin_berth_type == 'tanker' %}bg-info{% elif schedule.origin_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.origin_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.origin_berth_start|date:"M d, H:i" }} - {{ schedule.origin_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if schedule.destination_berth_number %}
+                                                <span class="badge {% if schedule.destination_berth_type == 'container' %}bg-primary{% elif schedule.destination_berth_type == 'bulk' %}bg-secondary{% elif schedule.destination_berth_type == 'tanker' %}bg-info{% elif schedule.destination_berth_type == 'passenger' %}bg-success{% else %}bg-warning text-dark{% endif %} berth-badge">
+                                                    {{ schedule.destination_berth_number }}
+                                                </span>
+                                                <div class="small text-muted">
+                                                    {{ schedule.destination_berth_start|date:"M d, H:i" }} - {{ schedule.destination_berth_end|date:"M d, H:i" }}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">Not assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if schedule.status == 'delayed' %}
+                                                <span class="badge bg-warning text-dark schedule-badge">Delayed</span>
+                                            {% elif schedule.status == 'cancelled' %}
+                                                <span class="badge bg-secondary schedule-badge">Cancelled</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-outline-info btn-sm view-schedule-btn" data-bs-toggle="modal" data-bs-target="#viewScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-eye"></i></button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm edit-schedule-btn" data-bs-toggle="modal" data-bs-target="#editScheduleModal" data-id="{{ schedule.id }}"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-outline-warning btn-sm update-status-btn" data-bs-toggle="modal" data-bs-target="#updateStatusModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}" data-current-status="{{ schedule.status }}"><i class="bi bi-arrow-clockwise"></i></button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm delete-schedule-btn" data-bs-toggle="modal" data-bs-target="#deleteScheduleModal" data-id="{{ schedule.id }}" data-ship-name="{{ schedule.ship_name }}"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No issues found in schedules.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="mt-4">
+            <nav>
+                <ul class="pagination justify-content-center">
+                    {% if schedules.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ schedules.previous_page_number }}{% if request.GET.ship_name %}&ship_name={{ request.GET.ship_name }}{% endif %}{% if request.GET.port_name %}&port_name={{ request.GET.port_name }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.berth_number %}&berth_number={{ request.GET.berth_number }}{% endif %}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in schedules.paginator.page_range %}
+                        <li class="page-item {% if schedules.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page={{ num }}{% if request.GET.ship_name %}&ship_name={{ request.GET.ship_name }}{% endif %}{% if request.GET.port_name %}&port_name={{ request.GET.port_name }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.berth_number %}&berth_number={{ request.GET.berth_number }}{% endif %}">{{ num }}</a>
+                        </li>
+                    {% endfor %}
+
+                    {% if schedules.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ schedules.next_page_number }}{% if request.GET.ship_name %}&ship_name={{ request.GET.ship_name }}{% endif %}{% if request.GET.port_name %}&port_name={{ request.GET.port_name }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}{% if request.GET.berth_number %}&berth_number={{ request.GET.berth_number }}{% endif %}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- View Schedule Modal -->
+<div class="modal fade" id="viewScheduleModal" tabindex="-1" aria-labelledby="viewScheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewScheduleModalLabel">Schedule Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6>Ship</h6>
+                        <p id="viewShipName"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Route</h6>
+                        <p id="viewRouteName"></p>
+                    </div>
+                </div>
+                
+                <!-- Voyage Information -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">Voyage Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Departure:</strong> <span id="viewDeparture"></span></p>
+                                <p><strong>Origin Port:</strong> <span id="viewOrigin"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Arrival:</strong> <span id="viewArrival"></span></p>
+                                <p><strong>Destination Port:</strong> <span id="viewDestination"></span></p>
+                            </div>
+                        </div>
+                        <p><strong>Status:</strong> <span id="viewStatus"></span></p>
+                        <p><strong>Max Cargo:</strong> <span id="viewMaxCargo"></span> <span id="viewCargoUnit"></span></p>
+                    </div>
+                </div>
+                
+                <!-- Origin Berth Information -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">Origin Berth Booking</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Berth Number:</strong> <span id="viewOriginBerth"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Type:</strong> <span id="viewOriginBerthType"></span></p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Booking Start:</strong> <span id="viewOriginBerthStart"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Booking End:</strong> <span id="viewOriginBerthEnd"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Destination Berth Information -->
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0">Destination Berth Booking</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Berth Number:</strong> <span id="viewDestinationBerth"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Type:</strong> <span id="viewDestinationBerthType"></span></p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Booking Start:</strong> <span id="viewDestinationBerthStart"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Booking End:</strong> <span id="viewDestinationBerthEnd"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notes Section -->
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Notes</h6>
+                    </div>
+                    <div class="card-body">
+                        <p id="viewNotes"></p>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="card mt-3">
+                    <div class="card-header bg-dark text-white">
+                        <h6 class="mb-0">Schedule Timeline</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline-container">
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineOriginStart"></div>
+                                <strong>Origin Berth Booking Start</strong>
+                                <div class="datetime-range" id="timelineOriginStartDate"></div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineDeparture"></div>
+                                <strong>Departure</strong>
+                                <div class="datetime-range" id="timelineDepartureDate"></div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineOriginEnd"></div>
+                                <strong>Origin Berth Booking End</strong>
+                                <div class="datetime-range" id="timelineOriginEndDate"></div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineDestinationStart"></div>
+                                <strong>Destination Berth Booking Start</strong>
+                                <div class="datetime-range" id="timelineDestinationStartDate"></div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineArrival"></div>
+                                <strong>Arrival</strong>
+                                <div class="datetime-range" id="timelineArrivalDate"></div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker" id="timelineDestinationEnd"></div>
+                                <strong>Destination Berth Booking End</strong>
+                                <div class="datetime-range" id="timelineDestinationEndDate"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editFromViewBtn">Edit Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Schedule Modal (simplified for demo) -->
+<div class="modal fade" id="editScheduleModal" tabindex="-1" aria-labelledby="editScheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editScheduleModalLabel">Edit Schedule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editScheduleForm" method="post" action="/shipowner/schedules/edit/">
+                    {% csrf_token %}
+                    <input type="hidden" id="editScheduleId" name="id">
+                    
+                    <!-- This would have fields similar to the create schedule form -->
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> This modal would contain a full edit form with all schedule fields.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="editScheduleForm" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="updateStatusModalLabel">Update Schedule Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="updateStatusForm" method="post" action="/shipowner/schedules/update-status/">
+                    {% csrf_token %}
+                    <input type="hidden" id="updateStatusId" name="id">
+                    
+                    <div class="mb-3">
+                        <label for="updateShipName" class="form-label">Ship</label>
+                        <input type="text" class="form-control" id="updateShipName" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="updateCurrentStatus" class="form-label">Current Status</label>
+                        <input type="text" class="form-control" id="updateCurrentStatus" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="updateNewStatus" class="form-label">New Status</label>
+                        <select class="form-select" id="updateNewStatus" name="status" required>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="delayed">Delayed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="updateStatusReason" class="form-label">Reason for Update</label>
+                        <textarea class="form-control" id="updateStatusReason" name="reason" rows="3" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="updateStatusForm" class="btn btn-primary">Update Status</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Schedule Modal -->
+<div class="modal fade" id="deleteScheduleModal" tabindex="-1" aria-labelledby="deleteScheduleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteScheduleModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the schedule for ship "<span id="deleteScheduleShipName"></span>"?</p>
+                <p class="text-danger">This action cannot be undone. Any berth reservations associated with this schedule will be cancelled.</p>
+                <form id="deleteScheduleForm" method="post" action="/shipowner/schedules/delete/">
+                    {% csrf_token %}
+                    <input type="hidden" id="deleteScheduleId" name="id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteScheduleForm" class="btn btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // Initialize datetime pickers
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize flatpickr for all date inputs
+        const datePickers = document.querySelectorAll('.date-picker');
+        datePickers.forEach(picker => {
+            flatpickr(picker, {
+                dateFormat: "Y-m-d",
+                minDate: "2023-01-01"
+            });
+        });
+        
+        // View Schedule Modal functionality
+        const viewScheduleModal = document.getElementById('viewScheduleModal');
+        if (viewScheduleModal) {
+            viewScheduleModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const shipName = button.getAttribute('data-ship-name');
+                const shipType = button.getAttribute('data-ship-type');
+                const routeName = button.getAttribute('data-route-name');
+                const origin = button.getAttribute('data-origin');
+                const destination = button.getAttribute('data-destination');
+                const departure = button.getAttribute('data-departure');
+                const arrival = button.getAttribute('data-arrival');
+                const status = button.getAttribute('data-status');
+                const maxCargo = button.getAttribute('data-max-cargo');
+                const notes = button.getAttribute('data-notes');
+                
+                // Berth information
+                const originBerth = button.getAttribute('data-origin-berth');
+                const originBerthType = button.getAttribute('data-origin-berth-type');
+                const originBerthStart = button.getAttribute('data-origin-berth-start');
+                const originBerthEnd = button.getAttribute('data-origin-berth-end');
+                
+                const destinationBerth = button.getAttribute('data-destination-berth');
+                const destinationBerthType = button.getAttribute('data-destination-berth-type');
+                const destinationBerthStart = button.getAttribute('data-destination-berth-start');
+                const destinationBerthEnd = button.getAttribute('data-destination-berth-end');
+                
+                // Update modal content
+                document.getElementById('viewShipName').textContent = shipName || 'Not specified';
+                document.getElementById('viewRouteName').textContent = routeName || `${origin} to ${destination}`;
+                document.getElementById('viewDeparture').textContent = departure || 'Not scheduled';
+                document.getElementById('viewArrival').textContent = arrival || 'Not scheduled';
+                document.getElementById('viewOrigin').textContent = origin || 'Not specified';
+                document.getElementById('viewDestination').textContent = destination || 'Not specified';
+                
+                // Set cargo units based on ship type
+                let cargoUnit = '';
+                if (shipType === 'container') {
+                    cargoUnit = 'TEU';
+                } else if (shipType === 'bulk' || shipType === 'tanker') {
+                    cargoUnit = 'MT';
+                } else {
+                    cargoUnit = 'units';
+                }
+                
+                document.getElementById('viewMaxCargo').textContent = maxCargo || 'Not specified';
+                document.getElementById('viewCargoUnit').textContent = cargoUnit;
+                
+                // Status badge
+                const statusElement = document.getElementById('viewStatus');
+                let statusHtml = '';
+                
+                switch(status) {
+                    case 'scheduled':
+                        statusHtml = '<span class="badge bg-primary">Scheduled</span>';
+                        break;
+                    case 'in_progress':
+                        statusHtml = '<span class="badge bg-info">In Progress</span>';
+                        break;
+                    case 'completed':
+                        statusHtml = '<span class="badge bg-success">Completed</span>';
+                        break;
+                    case 'delayed':
+                        statusHtml = '<span class="badge bg-warning text-dark">Delayed</span>';
+                        break;
+                    case 'cancelled':
+                    statusHtml = '<span class="badge bg-secondary">Cancelled</span>';
+                        break;
+                    default:
+                        statusHtml = '<span class="badge bg-light text-dark">' + status + '</span>';
+                }
+                
+                statusElement.innerHTML = statusHtml;
+                
+                // Set berth information
+                document.getElementById('viewOriginBerth').textContent = originBerth || 'Not assigned';
+                document.getElementById('viewDestinationBerth').textContent = destinationBerth || 'Not assigned';
+                
+                // Berth types
+                const originBerthTypeElement = document.getElementById('viewOriginBerthType');
+                const destinationBerthTypeElement = document.getElementById('viewDestinationBerthType');
+                
+                if (originBerthType) {
+                    let originTypeHtml = '';
+                    switch(originBerthType) {
+                        case 'container':
+                            originTypeHtml = '<span class="badge bg-primary">Container</span>';
+                            break;
+                        case 'bulk':
+                            originTypeHtml = '<span class="badge bg-secondary">Bulk</span>';
+                            break;
+                        case 'tanker':
+                            originTypeHtml = '<span class="badge bg-info">Tanker</span>';
+                            break;
+                        case 'passenger':
+                            originTypeHtml = '<span class="badge bg-success">Passenger</span>';
+                            break;
+                        case 'multipurpose':
+                            originTypeHtml = '<span class="badge bg-warning text-dark">Multipurpose</span>';
+                            break;
+                        default:
+                            originTypeHtml = originBerthType || 'Not specified';
+                    }
+                    originBerthTypeElement.innerHTML = originTypeHtml;
+                } else {
+                    originBerthTypeElement.textContent = 'N/A';
+                }
+                
+                if (destinationBerthType) {
+                    let destTypeHtml = '';
+                    switch(destinationBerthType) {
+                        case 'container':
+                            destTypeHtml = '<span class="badge bg-primary">Container</span>';
+                            break;
+                        case 'bulk':
+                            destTypeHtml = '<span class="badge bg-secondary">Bulk</span>';
+                            break;
+                        case 'tanker':
+                            destTypeHtml = '<span class="badge bg-info">Tanker</span>';
+                            break;
+                        case 'passenger':
+                            destTypeHtml = '<span class="badge bg-success">Passenger</span>';
+                            break;
+                        case 'multipurpose':
+                            destTypeHtml = '<span class="badge bg-warning text-dark">Multipurpose</span>';
+                            break;
+                        default:
+                            destTypeHtml = destinationBerthType || 'Not specified';
+                    }
+                    destinationBerthTypeElement.innerHTML = destTypeHtml;
+                } else {
+                    destinationBerthTypeElement.textContent = 'N/A';
+                }
+                
+                // Berth booking times
+                document.getElementById('viewOriginBerthStart').textContent = originBerthStart || 'Not scheduled';
+                document.getElementById('viewOriginBerthEnd').textContent = originBerthEnd || 'Not scheduled';
+                document.getElementById('viewDestinationBerthStart').textContent = destinationBerthStart || 'Not scheduled';
+                document.getElementById('viewDestinationBerthEnd').textContent = destinationBerthEnd || 'Not scheduled';
+                
+                // Notes
+                document.getElementById('viewNotes').textContent = notes || 'No additional notes';
+                
+                // Set up timeline
+                document.getElementById('timelineOriginStartDate').textContent = originBerthStart || 'Not scheduled';
+                document.getElementById('timelineDepartureDate').textContent = departure || 'Not scheduled';
+                document.getElementById('timelineOriginEndDate').textContent = originBerthEnd || 'Not scheduled';
+                document.getElementById('timelineDestinationStartDate').textContent = destinationBerthStart || 'Not scheduled';
+                document.getElementById('timelineArrivalDate').textContent = arrival || 'Not scheduled';
+                document.getElementById('timelineDestinationEndDate').textContent = destinationBerthEnd || 'Not scheduled';
+                
+                // Determine current position in timeline
+                const now = new Date();
+                const timelineMarkers = document.querySelectorAll('.timeline-marker');
+                
+                // Reset all markers
+                timelineMarkers.forEach(marker => {
+                    marker.classList.remove('current-status');
+                });
+                
+                // Set current status
+                if (status === 'completed') {
+                    document.getElementById('timelineDestinationEnd').classList.add('current-status');
+                } else if (status === 'cancelled') {
+                    // No marker highlighted for cancelled
+                } else {
+                    // Determine where we are in the timeline
+                    const oriStartDate = originBerthStart ? new Date(originBerthStart) : null;
+                    const depDate = departure ? new Date(departure) : null;
+                    const oriEndDate = originBerthEnd ? new Date(originBerthEnd) : null;
+                    const destStartDate = destinationBerthStart ? new Date(destinationBerthStart) : null;
+                    const arrDate = arrival ? new Date(arrival) : null;
+                    const destEndDate = destinationBerthEnd ? new Date(destinationBerthEnd) : null;
+                    
+                    if (destEndDate && now >= destEndDate) {
+                        document.getElementById('timelineDestinationEnd').classList.add('current-status');
+                    } else if (arrDate && now >= arrDate) {
+                        document.getElementById('timelineArrival').classList.add('current-status');
+                    } else if (destStartDate && now >= destStartDate) {
+                        document.getElementById('timelineDestinationStart').classList.add('current-status');
+                    } else if (oriEndDate && now >= oriEndDate) {
+                        document.getElementById('timelineOriginEnd').classList.add('current-status');
+                    } else if (depDate && now >= depDate) {
+                        document.getElementById('timelineDeparture').classList.add('current-status');
+                    } else if (oriStartDate && now >= oriStartDate) {
+                        document.getElementById('timelineOriginStart').classList.add('current-status');
+                    }
+                }
+                
+                // Set up edit button
+                const editFromViewBtn = document.getElementById('editFromViewBtn');
+                editFromViewBtn.setAttribute('data-id', id);
+                editFromViewBtn.onclick = function() {
+                    document.getElementById('editScheduleId').value = id;
+                    // Hide the view modal
+                    const viewModal = bootstrap.Modal.getInstance(viewScheduleModal);
+                    viewModal.hide();
+                    // Show the edit modal
+                    const editModal = new bootstrap.Modal(document.getElementById('editScheduleModal'));
+                    editModal.show();
+                };
+            });
+        }
+        
+        // Update Status Modal functionality
+        const updateStatusModal = document.getElementById('updateStatusModal');
+        if (updateStatusModal) {
+            updateStatusModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const shipName = button.getAttribute('data-ship-name');
+                const currentStatus = button.getAttribute('data-current-status');
+                
+                // Update form fields
+                document.getElementById('updateStatusId').value = id;
+                document.getElementById('updateShipName').value = shipName;
+                document.getElementById('updateCurrentStatus').value = currentStatus;
+                
+                // Pre-select the current status in the dropdown
+                document.getElementById('updateNewStatus').value = currentStatus;
+            });
+        }
+        
+        // Delete Schedule Modal functionality
+        const deleteScheduleModal = document.getElementById('deleteScheduleModal');
+        if (deleteScheduleModal) {
+            deleteScheduleModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                
+                // Extract data from button attributes
+                const id = button.getAttribute('data-id');
+                const shipName = button.getAttribute('data-ship-name');
+                
+                // Update form fields
+                document.getElementById('deleteScheduleId').value = id;
+                document.getElementById('deleteScheduleShipName').textContent = shipName;
+            });
+        }
+        
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert:not(.filter-alert)');
+            alerts.forEach(function(alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    });
+</script>
+</body>
+</html>
