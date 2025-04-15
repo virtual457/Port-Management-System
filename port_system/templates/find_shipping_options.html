@@ -168,6 +168,83 @@
             padding: 3px 8px;
             border-radius: 12px;
         }
+
+        .option-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.option-card::before {
+    content: "Click to view this route on map";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    border-radius: 12px;
+}
+
+.option-card:hover::before {
+    opacity: 1;
+}
+
+/* Selected route card styling */
+.option-card.selected-route {
+    border: 2px solid #0d6efd;
+    box-shadow: 0 0 15px rgba(13, 110, 253, 0.3);
+    transform: translateY(-5px);
+}
+
+.option-card.selected-route::before {
+    content: "Currently viewing on map";
+    background-color: rgba(13, 110, 253, 0.8);
+    opacity: 1;
+}
+
+/* Prevent hover overlay on buttons */
+.option-card .btn {
+    position: relative;
+    z-index: 20;
+}
+
+/* Improve map container styling */
+#routeMapContainer {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+#routeMap {
+    height: 300px;  /* Increased height for better visibility */
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Route segments in connecting routes */
+.route-segment {
+    transition: background-color 0.3s;
+}
+
+.selected-route .route-segment {
+    background-color: #e7f1ff;
+}
+
+/* Map controls styling */
+.btn-map-control {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+}
     </style>
 </head>
 <body>
@@ -290,9 +367,11 @@
                     
                     <!-- Route Map (shows when routes are found) -->
                     <div id="routeMapContainer" style="display: none;">
+                        <h5 class="mb-3">Route Map Visualization</h5>
+                        <p class="text-muted small mb-2">Click on a shipping option below to highlight its route on the map</p>
                         <div id="routeMap"></div>
                     </div>
-                    
+
                     <!-- Results or Initial Message -->
                     {% if is_search_submitted %}
                         {% if shipping_options %}
@@ -300,7 +379,9 @@
                             {% if direct_routes %}
                                 <h5 class="mb-3">Direct Routes</h5>
                                 {% for option in direct_routes %}
-                                    <div class="option-card">
+                                <div class="option-card" data-route-id="direct-{{ forloop.counter }}" 
+                                data-origin-lat="{{ option.origin_lat }}" data-origin-lng="{{ option.origin_lng }}"
+                                data-dest-lat="{{ option.destination_lat }}" data-dest-lng="{{ option.destination_lng }}">
                                         <div class="option-header d-flex justify-content-between align-items-center">
                                             <span>
                                                 <i class="bi bi-arrow-right me-1"></i> Direct Route
@@ -374,7 +455,7 @@
                             {% if connected_routes %}
                                 <h5 class="mb-3 mt-4">Connecting Routes</h5>
                                 {% for option in connected_routes %}
-                                    <div class="option-card">
+                                <div class="option-card" data-route-id="connecting-{{ forloop.counter }}">
                                         <div class="option-header d-flex justify-content-between align-items-center">
                                             <span>
                                                 <i class="bi bi-arrow-repeat me-1"></i> Connecting Route
@@ -409,7 +490,9 @@
                                             <!-- Route segments -->
                                             <div class="route-segments mb-4">
                                                 {% for segment in option.segments %}
-                                                    <div class="route-segment">
+                                                <div class="route-segment"
+                                                data-origin-lat="{{ segment.origin_lat }}" data-origin-lng="{{ segment.origin_lng }}"
+                                                data-dest-lat="{{ segment.destination_lat }}" data-dest-lng="{{ segment.destination_lng }}">
                                                         <div class="d-flex justify-content-between mb-2">
                                                             <span class="badge bg-secondary">Segment {{ forloop.counter }}</span>
                                                             <span class="badge bg-primary">{{ segment.duration }} days</span>
@@ -496,152 +579,467 @@
 
 <script>
     // Sidebar toggle functionality
-    const toggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('sidebar');
+    
 
-    toggle.addEventListener('click', () => {
-        document.body.classList.toggle('sidebar-open');
-    });
+    // This function will be called when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates if not already set
+    initializeDateFields();
+    
+    // Initialize cargo selection handling
+    initializeCargoSelection();
+    
+    // Initialize the map when shipping options are available
+    initializeRouteMap();
+});
 
-    document.addEventListener('click', function (event) {
-        const isClickInsideSidebar = sidebar.contains(event.target);
-        const isClickOnToggle = toggle.contains(event.target);
-        if (!isClickInsideSidebar && !isClickOnToggle) {
-            document.body.classList.remove('sidebar-open');
+// Initialize default dates for search form
+function initializeDateFields() {
+    const earliestDeparture = document.getElementById('earliestDeparture');
+    const latestArrival = document.getElementById('latestArrival');
+    
+    if (!earliestDeparture.value) {
+        const today = new Date();
+        earliestDeparture.value = today.toISOString().split('T')[0];
+    }
+    
+    if (!latestArrival.value) {
+        const thirtyDaysLater = new Date();
+        thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+        latestArrival.value = thirtyDaysLater.toISOString().split('T')[0];
+    }
+}
+
+// Handle cargo selection and display cargo details
+function initializeCargoSelection() {
+    const cargoSelect = document.getElementById('cargoSelect');
+    const cargoDetailsPanel = document.getElementById('cargoDetailsPanel');
+    const cargoDescription = document.getElementById('cargoDescription');
+    const cargoType = document.getElementById('cargoType');
+    const cargoWeight = document.getElementById('cargoWeight');
+    const cargoDimensions = document.getElementById('cargoDimensions');
+    
+    if (cargoSelect) {
+        cargoSelect.addEventListener('change', function() {
+            const selectedOption = cargoSelect.options[cargoSelect.selectedIndex];
+            const cargoId = selectedOption.value;
+            
+            if (cargoId) {
+                // Display cargo details
+                fetch(`/api/cargo/${cargoId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        cargoDescription.textContent = data.description || 'No description available';
+                        cargoType.textContent = data.type ? data.type.charAt(0).toUpperCase() + data.type.slice(1) : 'Not specified';
+                        cargoWeight.textContent = data.weight || '0';
+                        cargoDimensions.textContent = data.dimensions || 'Not specified';
+                        cargoDetailsPanel.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error fetching cargo details:', error);
+                        // Fallback to basic display with available data
+                        cargoDescription.textContent = selectedOption.textContent.split('(')[0].trim() || 'No description available';
+                        cargoType.textContent = 'Not specified';
+                        cargoWeight.textContent = selectedOption.dataset.weight || '0';
+                        cargoDimensions.textContent = 'Not available';
+                        cargoDetailsPanel.style.display = 'block';
+                    });
+            } else {
+                cargoDetailsPanel.style.display = 'none';
+            }
+        });
+        
+        // Trigger change event if a cargo is already selected
+        if (cargoSelect.value) {
+            cargoSelect.dispatchEvent(new Event('change'));
+        }
+    }
+}
+
+// Parse route data from the HTML to JavaScript objects
+function parseRouteData() {
+    // Get all direct route cards
+    const directRouteCards = document.querySelectorAll('.option-card[data-route-id^="direct-"]');
+    const connectingRouteCards = document.querySelectorAll('.option-card[data-route-id^="connecting-"]');
+    
+    // Parse direct routes
+    directRouteCards.forEach((optionCard, index) => {
+        const routeId = optionCard.getAttribute('data-route-id') || `direct-${index}`;
+        
+        // Extract route data from the card
+        const originPortElement = optionCard.querySelector('.port-name:first-of-type');
+        const destinationPortElement = optionCard.querySelector('.port-name:last-of-type');
+        
+        // Check if elements exist before accessing textContent
+        if (!originPortElement || !destinationPortElement) {
+            console.warn('Missing port elements in route card:', routeId);
+            return; // Skip this route
+        }
+        
+        const originPort = originPortElement.textContent;
+        const destinationPort = destinationPortElement.textContent;
+        
+        // Get coordinates from data attributes
+        const originLat = parseFloat(optionCard.getAttribute('data-origin-lat') || 0);
+        const originLng = parseFloat(optionCard.getAttribute('data-origin-lng') || 0);
+        const destLat = parseFloat(optionCard.getAttribute('data-dest-lat') || 0);
+        const destLng = parseFloat(optionCard.getAttribute('data-dest-lng') || 0);
+        
+        // Only add routes with valid coordinates
+        if (originLat && originLng && destLat && destLng) {
+            // Store route data
+            window.allRoutes.push({
+                id: routeId,
+                type: 'direct',
+                segments: [{
+                    origin: { name: originPort, lat: originLat, lng: originLng },
+                    destination: { name: destinationPort, lat: destLat, lng: destLng }
+                }]
+            });
         }
     });
     
-    // Cargo selection handler
-    document.addEventListener('DOMContentLoaded', function() {
-        // Set default dates if not already set
-        const earliestDeparture = document.getElementById('earliestDeparture');
-        const latestArrival = document.getElementById('latestArrival');
+    // Parse connecting routes
+    connectingRouteCards.forEach((optionCard, index) => {
+        const routeId = optionCard.getAttribute('data-route-id') || `connecting-${index}`;
         
-        if (!earliestDeparture.value) {
-            const today = new Date();
-            earliestDeparture.value = today.toISOString().split('T')[0];
+        // Extract segments from the card
+        const segments = [];
+        const routeSegments = optionCard.querySelectorAll('.route-segment');
+        
+        if (routeSegments.length === 0) {
+            console.warn('No route segments found for connecting route:', routeId);
+            return; // Skip this route
         }
         
-        if (!latestArrival.value) {
-            const thirtyDaysLater = new Date();
-            thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-            latestArrival.value = thirtyDaysLater.toISOString().split('T')[0];
+        routeSegments.forEach((segment, segIndex) => {
+            const originPortElement = segment.querySelector('.port-name:first-of-type');
+            const destinationPortElement = segment.querySelector('.port-name:last-of-type');
+            
+            // Check if elements exist before accessing textContent
+            if (!originPortElement || !destinationPortElement) {
+                console.warn(`Missing port elements in segment ${segIndex} of route:`, routeId);
+                return; // Skip this segment
+            }
+            
+            const originPort = originPortElement.textContent;
+            const destinationPort = destinationPortElement.textContent;
+            
+            // Get coordinates from data attributes
+            const segOriginLat = parseFloat(segment.getAttribute('data-origin-lat') || 0);
+            const segOriginLng = parseFloat(segment.getAttribute('data-origin-lng') || 0);
+            const segDestLat = parseFloat(segment.getAttribute('data-dest-lat') || 0);
+            const segDestLng = parseFloat(segment.getAttribute('data-dest-lng') || 0);
+            
+            // Only add segments with valid coordinates
+            if (segOriginLat && segOriginLng && segDestLat && segDestLng) {
+                segments.push({
+                    origin: { name: originPort, lat: segOriginLat, lng: segOriginLng },
+                    destination: { name: destinationPort, lat: segDestLat, lng: segDestLng }
+                });
+            }
+        });
+        
+        // Only add routes with at least one valid segment
+        if (segments.length > 0) {
+            // Store route data
+            window.allRoutes.push({
+                id: routeId,
+                type: 'connecting',
+                segments: segments
+            });
         }
+    });
+    
+    console.log('Parsed routes:', window.allRoutes);
+}
+
+// Initialize the route map with all shipping options
+// Initialize the route map with all shipping options
+function initializeRouteMap() {
+    const routeMapContainer = document.getElementById('routeMapContainer');
+    if (!routeMapContainer) return;
+    
+    // Check if we have shipping options before displaying the map
+    if (document.querySelector('.option-card')) {
+        routeMapContainer.style.display = 'block';
         
-        const cargoSelect = document.getElementById('cargoSelect');
-        const cargoDetailsPanel = document.getElementById('cargoDetailsPanel');
-        const cargoDescription = document.getElementById('cargoDescription');
-        const cargoType = document.getElementById('cargoType');
-        const cargoWeight = document.getElementById('cargoWeight');
-        const cargoDimensions = document.getElementById('cargoDimensions');
+        // Create a global map object so it can be accessed by other functions
+        window.routeMap = L.map('routeMap').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(window.routeMap);
         
-        if (cargoSelect) {
-            cargoSelect.addEventListener('change', function() {
-                const selectedOption = cargoSelect.options[cargoSelect.selectedIndex];
-                const cargoId = selectedOption.value;
-                const cargoTypeVal = selectedOption.dataset.type;
-                const cargoWeightVal = selectedOption.dataset.weight;
+        // Store all route data for later use
+        window.allRoutes = [];
+        window.routeMarkers = [];
+        window.routeLines = [];
+        
+        // Process direct routes
+        document.querySelectorAll('.option-card[data-route-id^="direct-"]').forEach((card, index) => {
+            const routeId = card.getAttribute('data-route-id');
+            const originLat = parseFloat(card.getAttribute('data-origin-lat') || 0);
+            const originLng = parseFloat(card.getAttribute('data-origin-lng') || 0);
+            const destLat = parseFloat(card.getAttribute('data-dest-lat') || 0);
+            const destLng = parseFloat(card.getAttribute('data-dest-lng') || 0);
+            
+            if (originLat && originLng && destLat && destLng) {
+                // Get port names
+                const portNames = card.querySelectorAll('.port-name');
+                const originName = portNames.length > 0 ? portNames[0].textContent : "Origin";
+                const destName = portNames.length > 1 ? portNames[1].textContent : "Destination";
                 
-                if (cargoId) {
-                    // Display cargo details
-                    fetch(`/api/cargo/${cargoId}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            cargoDescription.textContent = data.description || 'No description available';
-                            cargoType.textContent = data.type ? data.type.charAt(0).toUpperCase() + data.type.slice(1) : 'Not specified';
-                            cargoWeight.textContent = data.weight || '0';
-                            cargoDimensions.textContent = data.dimensions || 'Not specified';
-                            cargoDetailsPanel.style.display = 'block';
-                        })
-                        .catch(error => {
-                            console.error('Error fetching cargo details:', error);
-                            // Fallback to basic display with available data
-                            const selectedOption = cargoSelect.options[cargoSelect.selectedIndex];
-                            cargoDescription.textContent = selectedOption.textContent.split('(')[0].trim() || 'No description available';
-                            cargoType.textContent = 'Not specified';
-                            cargoWeight.textContent = selectedOption.dataset.weight || '0';
-                            cargoDimensions.textContent = 'Not available';
-                            cargoDetailsPanel.style.display = 'block';
-                        });
-                } else {
-                    cargoDetailsPanel.style.display = 'none';
+                window.allRoutes.push({
+                    id: routeId,
+                    type: 'direct',
+                    segments: [{
+                        origin: { name: originName, lat: originLat, lng: originLng },
+                        destination: { name: destName, lat: destLat, lng: destLng }
+                    }]
+                });
+            }
+        });
+        
+        // Process connecting routes
+        document.querySelectorAll('.option-card[data-route-id^="connecting-"]').forEach((card, index) => {
+            const routeId = card.getAttribute('data-route-id');
+            const segments = [];
+            
+            // Get all segments within this card
+            card.querySelectorAll('.route-segment').forEach((segment) => {
+                const originLat = parseFloat(segment.getAttribute('data-origin-lat') || 0);
+                const originLng = parseFloat(segment.getAttribute('data-origin-lng') || 0);
+                const destLat = parseFloat(segment.getAttribute('data-dest-lat') || 0);
+                const destLng = parseFloat(segment.getAttribute('data-dest-lng') || 0);
+                
+                if (originLat && originLng && destLat && destLng) {
+                    // Get port names
+                    const portNames = segment.querySelectorAll('.port-name');
+                    const originName = portNames.length > 0 ? portNames[0].textContent : "Origin";
+                    const destName = portNames.length > 1 ? portNames[1].textContent : "Destination";
+                    
+                    segments.push({
+                        origin: { name: originName, lat: originLat, lng: originLng },
+                        destination: { name: destName, lat: destLat, lng: destLng }
+                    });
                 }
             });
             
-            // Trigger change event if a cargo is already selected (e.g., after form submission)
-            if (cargoSelect.value) {
-                cargoSelect.dispatchEvent(new Event('change'));
+            // Only add connecting routes with segments
+            if (segments.length > 0) {
+                window.allRoutes.push({
+                    id: routeId,
+                    type: 'connecting',
+                    segments: segments
+                });
             }
+        });
+        
+        console.log("Processed routes:", window.allRoutes);
+        
+        // Show all routes if we have any
+        if (window.allRoutes.length > 0) {
+            showAllRoutes();
+            addOptionCardClickHandlers();
+        }
+    }
+}
+
+// Display all routes on the map
+function showAllRoutes() {
+    // Clear existing markers and lines
+    clearMapRoutes();
+    
+    // Collect all points for map bounds
+    const bounds = [];
+    
+    // Add all routes to the map
+    window.allRoutes.forEach(route => {
+        const isConnecting = route.type === 'connecting';
+        const color = isConnecting ? '#6f42c1' : '#0d6efd';
+        const dashArray = isConnecting ? '5, 5' : null;
+        
+        route.segments.forEach(segment => {
+            // Add origin marker
+            if (segment.origin.lat && segment.origin.lng) {
+                const marker = L.marker([segment.origin.lat, segment.origin.lng])
+                    .addTo(window.routeMap)
+                    .bindPopup(segment.origin.name);
+                window.routeMarkers.push(marker);
+                bounds.push([segment.origin.lat, segment.origin.lng]);
+            }
+            
+            // Add destination marker
+            if (segment.destination.lat && segment.destination.lng) {
+                const marker = L.marker([segment.destination.lat, segment.destination.lng])
+                    .addTo(window.routeMap)
+                    .bindPopup(segment.destination.name);
+                window.routeMarkers.push(marker);
+                bounds.push([segment.destination.lat, segment.destination.lng]);
+            }
+            
+            // Add route line
+            if (segment.origin.lat && segment.origin.lng && segment.destination.lat && segment.destination.lng) {
+                const line = L.polyline(
+                    [[segment.origin.lat, segment.origin.lng], [segment.destination.lat, segment.destination.lng]],
+                    {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.7,
+                        dashArray: dashArray
+                    }
+                ).addTo(window.routeMap);
+                window.routeLines.push(line);
+            }
+        });
+    });
+    
+    // Fit map to show all points
+    if (bounds.length > 0) {
+        window.routeMap.fitBounds(bounds, { padding: [30, 30] });
+    }
+}
+
+// Show a specific route on the map
+function showRoute(routeId) {
+    // Find the selected route
+    const route = window.allRoutes.find(r => r.id === routeId);
+    if (!route) return;
+    
+    // Clear existing markers and lines
+    clearMapRoutes();
+    
+    // Collect all points for map bounds
+    const bounds = [];
+    
+    // Add selected route to the map
+    const isConnecting = route.type === 'connecting';
+    const color = isConnecting ? '#6f42c1' : '#0d6efd';
+    const dashArray = isConnecting ? '5, 5' : null;
+    
+    route.segments.forEach(segment => {
+        // Add origin marker
+        if (segment.origin.lat && segment.origin.lng) {
+            const marker = L.marker([segment.origin.lat, segment.origin.lng])
+                .addTo(window.routeMap)
+                .bindPopup(segment.origin.name);
+            window.routeMarkers.push(marker);
+            bounds.push([segment.origin.lat, segment.origin.lng]);
         }
         
-        // Initialize route map if there are shipping options
-        {% if shipping_options %}
-            const routeMapContainer = document.getElementById('routeMapContainer');
-            if (routeMapContainer) {
-                routeMapContainer.style.display = 'block';
-                
-                // Initialize the map
-                const map = L.map('routeMap').setView([20, 0], 2);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
-                }).addTo(map);
-                
-                // Add markers and routes
-                const bounds = [];
-                {% for option in shipping_options %}
-                    {% if option.route_type == 'direct' %}
-                        // Add markers for direct route
-                        const originLatLng_{{ forloop.counter }} = [{{ option.origin_lat }}, {{ option.origin_lng }}];
-                        const destLatLng_{{ forloop.counter }} = [{{ option.destination_lat }}, {{ option.destination_lng }}];
-                        
-                        bounds.push(originLatLng_{{ forloop.counter }});
-                        bounds.push(destLatLng_{{ forloop.counter }});
-                        
-                        L.marker(originLatLng_{{ forloop.counter }}).addTo(map)
-                            .bindPopup('{{ option.origin_port }}');
-                        L.marker(destLatLng_{{ forloop.counter }}).addTo(map)
-                            .bindPopup('{{ option.destination_port }}');
-                        
-                        // Add route line
-                        L.polyline([originLatLng_{{ forloop.counter }}, destLatLng_{{ forloop.counter }}], {
-                            color: '#0d6efd',
-                            weight: 3,
-                            opacity: 0.7
-                        }).addTo(map);
-                    {% else %}
-                        // Add markers and lines for each segment in a connected route
-                        {% for segment in option.segments %}
-                            const segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }} = [{{ segment.origin_lat }}, {{ segment.origin_lng }}];
-                            const segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }} = [{{ segment.destination_lat }}, {{ segment.destination_lng }}];
-                            
-                            bounds.push(segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }});
-                            bounds.push(segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }});
-                            
-                            L.marker(segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}).addTo(map)
-                                .bindPopup('{{ segment.origin_port }}');
-                            L.marker(segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}).addTo(map)
-                                .bindPopup('{{ segment.destination_port }}');
-                            
-                            // Add route line with different color for connected routes
-                            L.polyline([segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}, segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}], {
-                                color: '#6f42c1',
-                                weight: 3,
-                                opacity: 0.7,
-                                dashArray: '5, 5'
-                            }).addTo(map);
-                        {% endfor %}
-                    {% endif %}
-                {% endfor %}
-                
-                // Fit map bounds to show all markers
-                if (bounds.length > 0) {
-                    map.fitBounds(bounds, {
-                        padding: [30, 30]
-                    });
+        // Add destination marker
+        if (segment.destination.lat && segment.destination.lng) {
+            const marker = L.marker([segment.destination.lat, segment.destination.lng])
+                .addTo(window.routeMap)
+                .bindPopup(segment.destination.name);
+            window.routeMarkers.push(marker);
+            bounds.push([segment.destination.lat, segment.destination.lng]);
+        }
+        
+        // Add route line
+        if (segment.origin.lat && segment.origin.lng && segment.destination.lat && segment.destination.lng) {
+            const line = L.polyline(
+                [[segment.origin.lat, segment.origin.lng], [segment.destination.lat, segment.destination.lng]],
+                {
+                    color: color,
+                    weight: 3,
+                    opacity: 0.7,
+                    dashArray: dashArray
                 }
-            }
-        {% endif %}
+            ).addTo(window.routeMap);
+            window.routeLines.push(line);
+        }
     });
+    
+    // Fit map to show all points
+    if (bounds.length > 0) {
+        window.routeMap.fitBounds(bounds, { padding: [30, 30] });
+    }
+}
+
+// Clear all markers and lines from the map
+function clearMapRoutes() {
+    // Remove all markers
+    window.routeMarkers.forEach(marker => {
+        window.routeMap.removeLayer(marker);
+    });
+    window.routeMarkers = [];
+    
+    // Remove all lines
+    window.routeLines.forEach(line => {
+        window.routeMap.removeLayer(line);
+    });
+    window.routeLines = [];
+}
+
+// Add click handlers to option cards
+function addOptionCardClickHandlers() {
+    const optionCards = document.querySelectorAll('.option-card');
+    
+    // Add a "show all routes" button to the top of the map
+    const mapContainer = document.getElementById('routeMapContainer');
+    if (mapContainer) {
+        const showAllButton = document.createElement('button');
+        showAllButton.className = 'btn btn-sm btn-outline-secondary mb-2';
+        showAllButton.innerHTML = '<i class="bi bi-map"></i> Show All Routes';
+        showAllButton.addEventListener('click', function() {
+            // Reset all cards to default state
+            optionCards.forEach(card => {
+                card.classList.remove('selected-route');
+            });
+            showAllRoutes();
+        });
+        
+        mapContainer.insertBefore(showAllButton, document.getElementById('routeMap'));
+    }
+    
+    // Add click handler to each card
+    optionCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const routeId = this.getAttribute('data-route-id');
+            
+            // Skip if clicking on buttons in the card
+            if (event.target.closest('a.btn') || event.target.closest('button')) {
+                return;
+            }
+            
+            // Toggle selection status
+            if (this.classList.contains('selected-route')) {
+                // Deselect and show all routes
+                this.classList.remove('selected-route');
+                showAllRoutes();
+            } else {
+                // Deselect all other cards
+                optionCards.forEach(c => {
+                    c.classList.remove('selected-route');
+                });
+                
+                // Select this card and show its route
+                this.classList.add('selected-route');
+                showRoute(routeId);
+            }
+        });
+    });
+}
+
+// Sidebar toggle functionality
+const toggle = document.getElementById('sidebarToggle');
+const sidebar = document.getElementById('sidebar');
+
+toggle.addEventListener('click', () => {
+    document.body.classList.toggle('sidebar-open');
+});
+
+document.addEventListener('click', function (event) {
+    const isClickInsideSidebar = sidebar.contains(event.target);
+    const isClickOnToggle = toggle.contains(event.target);
+    
+    if (!isClickInsideSidebar && !isClickOnToggle) {
+        document.body.classList.remove('sidebar-open');
+    }
+});
+    
+    
 </script>
 </body>
 </html>

@@ -212,7 +212,7 @@ def find_shipping_options(request):
                         route['origin_lng'] = loc_data[1]
                         route['destination_lat'] = loc_data[2]
                         route['destination_lng'] = loc_data[3]
-    
+
     context = {
         'username': username,
         'ports': ports,
