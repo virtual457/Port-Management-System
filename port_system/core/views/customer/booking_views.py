@@ -177,6 +177,7 @@ def book_cargo(request, schedule_id):
 def book_connected_route(request, schedule_ids):
     """
     Handle booking cargo on a connected route with multiple segments.
+    Gets cargo_id from query parameters.
     """
     if request.method not in ['GET', 'POST']:
         return redirect('find-shipping-options')
@@ -429,7 +430,6 @@ def book_connected_route(request, schedule_ids):
     }
     
     return render(request, 'book_cargo.html', context)
-
 
 @role_required('customer')
 def view_bookings(request):

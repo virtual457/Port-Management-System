@@ -96,10 +96,13 @@ path('test-connected-routes/', shipping_views.test_connected_routes, name='test-
     path('customer/book-cargo/<int:schedule_id>/', booking_views.book_cargo, name='book-cargo'),
     
     # Connected route booking
-    path('customer/book-connected-route/<str:schedule_ids>/', booking_views.book_connected_route, name='book-connected-route'),
-    
+     path('customer/book-connected-route/<str:schedule_ids>/', 
+         booking_views.book_connected_route, 
+         name='book-connected-route'),
     # View bookings
     path('customer/bookings/', booking_views.view_bookings, name='customer-bookings'),
+    # View booking details
+    path('booking-details/<int:booking_id>/<str:booking_type>/', booking_views.view_booking_details, name='booking-details'),
     
     # Cancel booking
     path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', booking_views.cancel_booking, name='cancel-booking'),
