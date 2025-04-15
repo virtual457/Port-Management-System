@@ -889,3 +889,233 @@ BEGIN
 END //
 
 DELIMITER ;
+
+-- Create cargo_bookings table if it doesn't exist
+-- Create cargo_bookings table if it doesn't exist
+CREATE TABLE IF NOT EXISTS cargo_bookings (
+    booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    cargo_id INT NOT NULL,
+    schedule_id INT NOT NULL,
+    user_id INT NOT NULL,
+    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    booking_status ENUM('pending', 'confirmed', 'cancelled', 'completed') NOT NULL DEFAULT 'pending',
+    payment_status ENUM('unpaid', 'paid', 'refunded') NOT NULL DEFAULT 'unpaid',
+    price DECIMAL(12, 2) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_cargo_bookings_user ON cargo_bookings(user_id);
+CREATE INDEX idx_cargo_bookings_cargo ON cargo_bookings(cargo_id);
+CREATE INDEX idx_cargo_bookings_schedule ON cargo_bookings(schedule_id);
+CREATE INDEX idx_cargo_bookings_status ON cargo_bookings(booking_status);
+
+-- Create connected_bookings table if it doesn't exist (for multi-segment routes)
+CREATE TABLE IF NOT EXISTS connected_bookings (
+    connected_booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    cargo_id INT NOT NULL,
+    user_id INT NOT NULL,
+    origin_port_id INT NOT NULL,
+    destination_port_id INT NOT NULL,
+    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    booking_status ENUM('pending', 'confirmed', 'cancelled', 'completed') NOT NULL DEFAULT 'pending',
+    payment_status ENUM('unpaid', 'paid', 'refunded') NOT NULL DEFAULT 'unpaid',
+    total_price DECIMAL(12, 2) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id) ON DELETE CASCADE,
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id) ON DELETE CASCADE
+);
+
+-- Create indexes for connected_bookings
+CREATE INDEX idx_connected_bookings_user ON connected_bookings(user_id);
+CREATE INDEX idx_connected_bookings_cargo ON connected_bookings(cargo_id);
+CREATE INDEX idx_connected_bookings_status ON connected_bookings(booking_status);
+
+-- Create connected_booking_segments table to store individual segments of a connected booking
+CREATE TABLE IF NOT EXISTS connected_booking_segments (
+    segment_id INT AUTO_INCREMENT PRIMARY KEY,
+    connected_booking_id INT NOT NULL,
+    schedule_id INT NOT NULL,
+    segment_order INT NOT NULL,
+    segment_price DECIMAL(12, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id) ON DELETE CASCADE,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE
+);
+
+-- Create indexes for connected_booking_segments
+CREATE INDEX idx_segment_booking ON connected_booking_segments(connected_booking_id);
+CREATE INDEX idx_segment_schedule ON connected_booking_segments(schedule_id);
+CREATE INDEX idx_segment_order ON connected_booking_segments(segment_order);
+
+-- Create stored procedure to get booking details
+DELIMITER //
+CREATE PROCEDURE IF NOT EXISTS get_booking_details(IN p_booking_id INT, IN p_user_id INT)
+BEGIN
+    SELECT 
+        b.booking_id,
+        b.cargo_id,
+        c.description AS cargo_description,
+        c.cargo_type,
+        c.weight AS cargo_weight,
+        c.dimensions AS cargo_dimensions,
+        b.schedule_id,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        b.booking_status,
+        b.payment_status,
+        b.price,
+        b.booking_date,
+        b.notes,
+        ships.name AS ship_name,
+        ships.ship_type
+    FROM 
+        cargo_bookings b
+    JOIN 
+        cargo c ON b.cargo_id = c.cargo_id
+    JOIN 
+        schedules s ON b.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        b.booking_id = p_booking_id AND b.user_id = p_user_id;
+END//
+DELIMITER ;
+
+-- Create stored procedure to get connected booking details
+DELIMITER //
+CREATE PROCEDURE IF NOT EXISTS get_connected_booking_details(IN p_booking_id INT, IN p_user_id INT)
+BEGIN
+    -- Get main booking info
+    SELECT 
+        cb.connected_booking_id,
+        cb.cargo_id,
+        c.description AS cargo_description,
+        c.cargo_type,
+        c.weight AS cargo_weight,
+        c.dimensions AS cargo_dimensions,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        cb.booking_status,
+        cb.payment_status,
+        cb.total_price,
+        cb.booking_date,
+        cb.notes
+    FROM 
+        connected_bookings cb
+    JOIN 
+        cargo c ON cb.cargo_id = c.cargo_id
+    JOIN 
+        ports op ON cb.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON cb.destination_port_id = dp.port_id
+    WHERE 
+        cb.connected_booking_id = p_booking_id AND cb.user_id = p_user_id;
+    
+    -- Get segment details in a separate result set
+    SELECT 
+        cbs.segment_id,
+        cbs.segment_order,
+        cbs.schedule_id,
+        cbs.segment_price,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        TIMESTAMPDIFF(DAY, s.departure_date, s.arrival_date) AS duration,
+        ships.name AS ship_name,
+        ships.ship_type
+    FROM 
+        connected_booking_segments cbs
+    JOIN 
+        schedules s ON cbs.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        cbs.connected_booking_id = p_booking_id
+    ORDER BY 
+        cbs.segment_order;
+END//
+DELIMITER ;
+
+-- Create trigger to handle cargo status updates when a booking is made
+DELIMITER //
+CREATE TRIGGER IF NOT EXISTS after_booking_insert
+AFTER INSERT ON cargo_bookings
+FOR EACH ROW
+BEGIN
+    -- Update cargo status to 'booked'
+    UPDATE cargo 
+    SET status = 'booked'
+    WHERE cargo_id = NEW.cargo_id;
+END//
+DELIMITER ;
+
+-- Create trigger to handle cargo status updates when a connected booking is made
+DELIMITER //
+CREATE TRIGGER IF NOT EXISTS after_connected_booking_insert
+AFTER INSERT ON connected_bookings
+FOR EACH ROW
+BEGIN
+    -- Update cargo status to 'booked'
+    UPDATE cargo 
+    SET status = 'booked'
+    WHERE cargo_id = NEW.cargo_id;
+END//
+DELIMITER ;
+
+-- Create trigger to handle cargo status updates when a booking is cancelled
+DELIMITER //
+CREATE TRIGGER IF NOT EXISTS after_booking_update
+AFTER UPDATE ON cargo_bookings
+FOR EACH ROW
+BEGIN
+    IF NEW.booking_status = 'cancelled' AND OLD.booking_status != 'cancelled' THEN
+        -- Update cargo status back to 'pending'
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = NEW.cargo_id;
+    END IF;
+END//
+DELIMITER ;
+
+-- Create trigger to handle cargo status updates when a connected booking is cancelled
+DELIMITER //
+CREATE TRIGGER IF NOT EXISTS after_connected_booking_update
+AFTER UPDATE ON connected_bookings
+FOR EACH ROW
+BEGIN
+    IF NEW.booking_status = 'cancelled' AND OLD.booking_status != 'cancelled' THEN
+        -- Update cargo status back to 'pending'
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = NEW.cargo_id;
+    END IF;
+END//
+DELIMITER ;

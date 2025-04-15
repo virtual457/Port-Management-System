@@ -194,6 +194,7 @@ END //
 
 DELIMITER ;
 
+show tables;
 -- Example test calls
 /*
 -- Test direct route

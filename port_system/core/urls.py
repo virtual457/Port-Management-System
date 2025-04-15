@@ -5,7 +5,7 @@ from .views.admin import *;
 from .views.shipowner.schedule_views import *;
 from .views.shipowner.schedule_management_view import *;
 from .views.admin import berth_views;
-from .views.customer import shipping_views;
+from .views.customer import *;
 
 urlpatterns = [
     path('', views.login_view, name='login'),
@@ -92,4 +92,15 @@ path('customer/booking/<int:booking_id>/<str:booking_type>/', shipping_views.vie
 path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', shipping_views.cancel_booking, name='cancel-booking'),
 path('api/cargo/<int:cargo_id>/', shipping_views.get_cargo_details, name='get-cargo-details'),
 path('test-connected-routes/', shipping_views.test_connected_routes, name='test-connected-routes'),
+
+    path('customer/book-cargo/<int:schedule_id>/', booking_views.book_cargo, name='book-cargo'),
+    
+    # Connected route booking
+    path('customer/book-connected-route/<str:schedule_ids>/', booking_views.book_connected_route, name='book-connected-route'),
+    
+    # View bookings
+    path('customer/bookings/', booking_views.view_bookings, name='customer-bookings'),
+    
+    # Cancel booking
+    path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', booking_views.cancel_booking, name='cancel-booking'),
 ]
