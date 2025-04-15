@@ -211,9 +211,9 @@
                         <div class="mb-3">
                             <label for="originPort" class="form-label">Origin Port</label>
                             <select class="form-select" id="originPort" name="origin" required>
-                                <option value="" selected disabled>Select origin port</option>
+                                <option value="" disabled>Select origin port</option>
                                 {% for port in ports %}
-                                    <option value="{{ port.id }}" {% if request.GET.origin == port.id %}selected{% endif %}>{{ port.name }}, {{ port.country }}</option>
+                                    <option value="{{ port.id }}" {% if request.GET.origin|stringformat:'s' == port.id|stringformat:'s' %}selected{% endif %}>{{ port.name }}, {{ port.country }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -221,9 +221,9 @@
                         <div class="mb-3">
                             <label for="destinationPort" class="form-label">Destination Port</label>
                             <select class="form-select" id="destinationPort" name="destination" required>
-                                <option value="" selected disabled>Select destination port</option>
+                                <option value="" disabled>Select destination port</option>
                                 {% for port in ports %}
-                                    <option value="{{ port.id }}" {% if request.GET.destination == port.id %}selected{% endif %}>{{ port.name }}, {{ port.country }}</option>
+                                    <option value="{{ port.id }}" {% if request.GET.destination|stringformat:'s' == port.id|stringformat:'s' %}selected{% endif %}>{{ port.name }}, {{ port.country }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -231,9 +231,12 @@
                         <div class="mb-3">
                             <label for="cargoSelect" class="form-label">Select Your Cargo</label>
                             <select class="form-select" id="cargoSelect" name="cargo_id" required>
-                                <option value="" selected disabled>Select cargo item</option>
+                                <option value="" disabled>Select cargo item</option>
                                 {% for cargo in user_cargo %}
-                                    <option value="{{ cargo.id }}" data-weight="{{ cargo.weight }}" data-type="{{ cargo.type }}" {% if request.GET.cargo_id == cargo.id %}selected{% endif %}>
+                                    <option value="{{ cargo.id }}" 
+                                            data-weight="{{ cargo.weight }}" 
+                                            data-type="{{ cargo.type }}" 
+                                            {% if request.GET.cargo_id|stringformat:'s' == cargo.id|stringformat:'s' %}selected{% endif %}>
                                         {{ cargo.description }} ({{ cargo.weight }} kg)
                                     </option>
                                 {% endfor %}
@@ -242,16 +245,16 @@
                         
                         <div class="mb-3">
                             <label for="earliestDeparture" class="form-label">Earliest Departure Date</label>
-                            <input type="date" class="form-control" id="earliestDeparture" name="earliest_date" value="{{ request.GET.earliest_date }}">
+                            <input type="date" class="form-control" id="earliestDeparture" name="earliest_date" value="{{ request.GET.earliest_date|default:'' }}">
                         </div>
                         
                         <div class="mb-3">
                             <label for="latestArrival" class="form-label">Latest Arrival Date</label>
-                            <input type="date" class="form-control" id="latestArrival" name="latest_date" value="{{ request.GET.latest_date }}">
+                            <input type="date" class="form-control" id="latestArrival" name="latest_date" value="{{ request.GET.latest_date|default:'' }}">
                         </div>
                         
                         <div class="mb-3 form-check">
-                            <input type="checkbox" class="form-check-input" id="allowConnections" name="allow_connections" {% if request.GET.allow_connections %}checked{% endif %}>
+                            <input type="checkbox" class="form-check-input" id="allowConnections" name="allow_connections" {% if 'allow_connections' in request.GET %}checked{% endif %}>
                             <label class="form-check-label" for="allowConnections">Show connecting routes</label>
                         </div>
                         
@@ -352,8 +355,8 @@
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6 text-md-end">
-                                                    <div class="price-tag">${{ option.total_cost }}</div>
-                                                    <small class="text-muted d-block">${{ option.cost_per_kg }} per kg × {{ option.cargo_weight }} kg</small>
+                                                    <div class="price-tag">${{ option.total_cost|floatformat:2 }}</div>
+                                                    <small class="text-muted d-block">${{ option.cost_per_kg|floatformat:2 }} per kg × {{ option.cargo_weight }} kg</small>
                                                 </div>
                                             </div>
                                             
@@ -448,7 +451,7 @@
                                                     <small class="text-muted">Including {{ option.total_connection_time }} days in connections</small>
                                                 </div>
                                                 <div class="col-md-6 text-md-end">
-                                                    <div class="price-tag">${{ option.total_cost }}</div>
+                                                    <div class="price-tag">${{ option.total_cost|floatformat:2 }}</div>
                                                     <small class="text-muted d-block">Combined costs for all segments</small>
                                                 </div>
                                             </div>
@@ -510,6 +513,21 @@
     
     // Cargo selection handler
     document.addEventListener('DOMContentLoaded', function() {
+        // Set default dates if not already set
+        const earliestDeparture = document.getElementById('earliestDeparture');
+        const latestArrival = document.getElementById('latestArrival');
+        
+        if (!earliestDeparture.value) {
+            const today = new Date();
+            earliestDeparture.value = today.toISOString().split('T')[0];
+        }
+        
+        if (!latestArrival.value) {
+            const thirtyDaysLater = new Date();
+            thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+            latestArrival.value = thirtyDaysLater.toISOString().split('T')[0];
+        }
+        
         const cargoSelect = document.getElementById('cargoSelect');
         const cargoDetailsPanel = document.getElementById('cargoDetailsPanel');
         const cargoDescription = document.getElementById('cargoDescription');
@@ -570,7 +588,7 @@
                 // Add markers and routes
                 const bounds = [];
                 {% for option in shipping_options %}
-                    {% if option.type == 'direct' %}
+                    {% if option.route_type == 'direct' %}
                         // Add markers for direct route
                         const originLatLng = [{{ option.origin_lat }}, {{ option.origin_lng }}];
                         const destLatLng = [{{ option.destination_lat }}, {{ option.destination_lng }}];

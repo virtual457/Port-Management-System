@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Details</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .details-card {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            margin: auto;
+            width: 100%;
+        }
+        #routeMap {
+            height: 250px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .card-header-tabs {
+            margin-right: -1.25rem;
+            margin-bottom: -0.75rem;
+            margin-left: -1.25rem;
+            border-bottom: 0;
+        }
+        .cargo-details {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .booking-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 3px solid #6610f2;
+        }
+        .journey-info {
+            border-left: 3px solid #0d6efd;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .route-segment {
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            margin-bottom: 10px;
+            border-left: 3px solid #6c757d;
+        }
+        .connection-info {
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #e9ecef;
+            border-radius: 8px;
+            border-left: 3px solid #ffc107;
+        }
+        .price-summary {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-top: 3px solid #198754;
+        }
+        .price-tag {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #198754;
+        }
+        .booking-status-badge {
+            font-size: 1rem;
+            padding: 5px 10px;
+        }
+        .notes-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 3px solid #6c757d;
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Customer Menu</h5>
+    <hr class="bg-light">
+    <a href="/customer/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/customer/cargo"><i class="bi bi-box-seam me-2"></i> Manage Cargo</a>
+    <a href="/customer/find-shipping"><i class="bi bi-search me-2"></i> Find Shipping</a>
+    <a href="/customer/bookings"><i class="bi bi-calendar-check me-2"></i> My Bookings</a>
+    <a href="/customer/schedules"><i class="bi bi-calendar3 me-2"></i> Available Schedules</a>
+    <a href="/customer/tracking"><i class="bi bi-geo-alt me-2"></i> Cargo Tracking</a>
+    <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-ticket-detailed me-2"></i> Booking Details
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Shipper" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="details-card">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <h3>
+                {% if booking_type == 'direct' %}
+                    Booking #{{ booking.booking_id }}
+                {% else %}
+                    Connected Booking #{{ booking.connected_booking_id }}
+                {% endif %}
+                
+                <!-- Booking Status Badge -->
+                {% if booking.booking_status == 'pending' %}
+                    <span class="badge bg-warning text-dark booking-status-badge">Pending</span>
+                {% elif booking.booking_status == 'confirmed' %}
+                    <span class="badge bg-success booking-status-badge">Confirmed</span>
+                {% elif booking.booking_status == 'cancelled' %}
+                    <span class="badge bg-secondary booking-status-badge">Cancelled</span>
+                {% elif booking.booking_status == 'completed' %}
+                    <span class="badge bg-primary booking-status-badge">Completed</span>
+                {% endif %}
+            </h3>
+            
+            <!-- Action buttons -->
+            <div>
+                <a href="{% url 'customer-bookings' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Bookings
+                </a>
+                
+                {% if booking.booking_status != 'cancelled' and booking.booking_status != 'completed' %}
+                    <button type="button" class="btn btn-danger ms-2" data-bs-toggle="modal" data-bs-target="#cancelBookingModal">
+                        <i class="bi bi-x-circle me-1"></i> Cancel Booking
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Route Map -->
+        <div id="routeMap"></div>
+        
+        <!-- Booking Information -->
+        <div class="booking-info mb-4">
+            <h5 class="mb-3">Booking Information</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Booking Date:</strong> {{ booking.booking_date|date:"M d, Y H:i" }}</p>
+                    <p><strong>Status:</strong> 
+                        {% if booking.booking_status == 'pending' %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif booking.booking_status == 'confirmed' %}
+                            <span class="badge bg-success">Confirmed</span>
+                        {% elif booking.booking_status == 'cancelled' %}
+                            <span class="badge bg-secondary">Cancelled</span>
+                        {% elif booking.booking_status == 'completed' %}
+                            <span class="badge bg-primary">Completed</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Payment Status:</strong>
+                        {% if booking.payment_status == 'unpaid' %}
+                            <span class="badge bg-danger">Unpaid</span>
+                        {% elif booking.payment_status == 'paid' %}
+                            <span class="badge bg-success">Paid</span>
+                        {% elif booking.payment_status == 'refunded' %}
+                            <span class="badge bg-info">Refunded</span>
+                        {% endif %}
+                    </p>
+                    <p><strong>Total Cost:</strong> 
+                        {% if booking_type == 'direct' %}
+                            ${{ booking.price|floatformat:2 }}
+                        {% else %}
+                            ${{ booking.total_price|floatformat:2 }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <!-- Cargo Information -->
+            <div class="col-md-4">
+                <div class="cargo-details">
+                    <h5 class="mb-3">Cargo Details</h5>
+                    <div class="mb-2">
+                        <strong>Description:</strong> {{ booking.cargo_description }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Type:</strong> 
+                        {% if booking.cargo_type == 'container' %}Container
+                        {% elif booking.cargo_type == 'bulk' %}Bulk
+                        {% elif booking.cargo_type == 'liquid' %}Liquid
+                        {% elif booking.cargo_type == 'vehicle' %}Vehicle
+                        {% else %}{{ booking.cargo_type|title }}{% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Weight:</strong> {{ booking.cargo_weight }} kg
+                    </div>
+                    {% if booking.cargo_dimensions %}
+                    <div>
+                        <strong>Dimensions:</strong> {{ booking.cargo_dimensions }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Journey Information -->
+            <div class="col-md-8">
+                <div class="journey-info">
+                    <h5 class="mb-3">Journey Information</h5>
+                    
+                    {% if booking_type == 'direct' %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>From:</strong> {{ booking.origin_port }}</p>
+                                <p><strong>Departure:</strong> {{ booking.departure_date|date:"M d, Y H:i" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>To:</strong> {{ booking.destination_port }}</p>
+                                <p><strong>Arrival:</strong> {{ booking.arrival_date|date:"M d, Y H:i" }}</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Ship:</strong> {{ booking.ship_name }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Ship Type:</strong> 
+                                {% if booking.ship_type == 'container' %}Container Ship
+                                {% elif booking.ship_type == 'bulk' %}Bulk Carrier
+                                {% elif booking.ship_type == 'tanker' %}Tanker
+                                {% elif booking.ship_type == 'roro' %}Roll-on/Roll-off
+                                {% else %}{{ booking.ship_type|title }}{% endif %}</p>
+                            </div>
+                        </div>
+                        <p><strong>Route:</strong> {{ booking.route_name }}</p>
+                        <p><strong>Distance:</strong> {{ booking.distance }} nautical miles</p>
+                    {% else %}
+                        <!-- Connected route information -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>From:</strong> {{ booking.origin_port }}</p>
+                                <p><strong>First Departure:</strong> {{ segments.0.departure_date|date:"M d, Y H:i" }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>To:</strong> {{ booking.destination_port }}</p>
+                                <p><strong>Final Arrival:</strong> {{ segments|last.arrival_date|date:"M d, Y H:i" }}</p>
+                            </div>
+                        </div>
+                        <p><strong>Total Distance:</strong> 
+                            {% with total_distance=0 %}
+                                {% for segment in segments %}
+                                    {% with total_distance=total_distance|add:segment.distance %}{% endwith %}
+                                {% endfor %}
+                                {{ total_distance|default:"0" }} nautical miles
+                            {% endwith %}
+                        </p>
+                        <p><strong>Segments:</strong> {{ segments|length }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        {% if segments %}
+        <!-- Connected Route Segments -->
+        <div class="mb-4">
+            <h5 class="mb-3">Journey Segments</h5>
+            {% for segment in segments %}
+                <div class="route-segment">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="badge bg-secondary">Segment {{ forloop.counter }}</span>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-5">
+                            <p class="mb-1"><strong>From:</strong> {{ segment.origin_port }}</p>
+                            <p class="mb-1"><strong>Departure:</strong> {{ segment.departure_date|date:"M d, Y H:i" }}</p>
+                        </div>
+                        <div class="col-md-2 d-flex justify-content-center align-items-center">
+                            <i class="bi bi-arrow-right"></i>
+                        </div>
+                        <div class="col-md-5">
+                            <p class="mb-1"><strong>To:</strong> {{ segment.destination_port }}</p>
+                            <p class="mb-1"><strong>Arrival:</strong> {{ segment.arrival_date|date:"M d, Y H:i" }}</p>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <p class="mb-1"><strong>Ship:</strong> {{ segment.ship_name }}</p>
+                        <p class="mb-0"><strong>Distance:</strong> {{ segment.distance }} nautical miles</p>
+                    </div>
+                </div>
+                
+                {% if not forloop.last %}
+                <div class="connection-info">
+                    <p class="mb-0"><i class="bi bi-clock me-2"></i> Connection time: {{ segment.connection_time }} days at {{ segment.destination_port }}</p>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Notes Section -->
+        {% if booking.notes %}
+        <div class="notes-section">
+            <h5 class="mb-3">Notes</h5>
+            <p>{{ booking.notes }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Cancel Booking Modal -->
+<div class="modal fade" id="cancelBookingModal" tabindex="-1" aria-labelledby="cancelBookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cancelBookingModalLabel">Confirm Cancellation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel this booking?</p>
+                <p><strong>Note:</strong> Cancellation may be subject to fees depending on how close to the departure date.</p>
+                
+                <form id="cancelBookingForm" method="post" action="{% if booking_type == 'direct' %}{% url 'cancel-booking' booking.booking_id 'direct' %}{% else %}{% url 'cancel-booking' booking.connected_booking_id 'connected' %}{% endif %}">
+                    {% csrf_token %}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" form="cancelBookingForm" class="btn btn-danger">Confirm Cancellation</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+    
+    // Initialize map
+    document.addEventListener('DOMContentLoaded', function() {
+        const map = L.map('routeMap').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        const bounds = [];
+        
+        {% if booking_type == 'direct' %}
+            // Add markers for direct route
+            const originLatLng = [{{ booking.origin_lat }}, {{ booking.origin_lng }}];
+            const destLatLng = [{{ booking.destination_lat }}, {{ booking.destination_lng }}];
+            
+            bounds.push(originLatLng);
+            bounds.push(destLatLng);
+            
+            L.marker(originLatLng).addTo(map)
+                .bindPopup('{{ booking.origin_port }}');
+            L.marker(destLatLng).addTo(map)
+                .bindPopup('{{ booking.destination_port }}');
+            
+            // Add route line
+            L.polyline([originLatLng, destLatLng], {
+                color: '#0d6efd',
+                weight: 3,
+                opacity: 0.7
+            }).addTo(map);
+        {% else %}
+            // Add markers and lines for each segment
+            {% for segment in segments %}
+                const segOriginLatLng = [{{ segment.origin_lat }}, {{ segment.origin_lng }}];
+                const segDestLatLng = [{{ segment.destination_lat }}, {{ segment.destination_lng }}];
+                
+                bounds.push(segOriginLatLng);
+                bounds.push(segDestLatLng);
+                
+                L.marker(segOriginLatLng).addTo(map)
+                    .bindPopup('{{ segment.origin_port }}');
+                L.marker(segDestLatLng).addTo(map)
+                    .bindPopup('{{ segment.destination_port }}');
+                
+                // Add route line
+                L.polyline([segOriginLatLng, segDestLatLng], {
+                    color: '#6f42c1',
+                    weight: 3,
+                    opacity: 0.7,
+                    dashArray: '5, 5'
+                }).addTo(map);
+            {% endfor %}
+        {% endif %}
+        
+        // Fit map bounds to show all markers
+        if (bounds.length > 0) {
+            map.fitBounds(bounds, {
+                padding: [30, 30]
+            });
+        }
+    });
+</script>
+</body>
+</html>

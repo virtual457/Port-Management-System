@@ -1,3 +1,4 @@
+-- Active: 1744521332564@@127.0.0.1@3306@port
 -- Drop and recreate the database
 DROP DATABASE IF EXISTS port;
 CREATE DATABASE port;
@@ -542,3 +543,105 @@ INSERT INTO cargo (user_id, description, cargo_type, weight, dimensions, special
 (5, 'Automotive Parts', 'container', 8500.00, '20×8×8.5', 'OEM parts for assembly line.', 'booked'),
 (6, 'Wine Barrels', 'container', 4200.00, '20×8×8.5', 'Temperature controlled. Handle with care.', 'pending'),
 (6, 'Milk Products', 'liquid', 10000.00, '20×8×8.5', 'Refrigerated transport required.', 'booked');
+
+
+---New ADditions
+CREATE TABLE connected_bookings (
+    connected_booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    cargo_id INT NOT NULL,
+    user_id INT NOT NULL,
+    origin_port_id INT NOT NULL,
+    destination_port_id INT NOT NULL,
+    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    booking_status ENUM('pending', 'confirmed', 'cancelled', 'completed') NOT NULL DEFAULT 'pending',
+    payment_status ENUM('unpaid', 'paid', 'refunded') NOT NULL DEFAULT 'unpaid',
+    total_price DECIMAL(12, 2) NOT NULL,
+    notes TEXT,
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id),
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id)
+);
+
+CREATE TABLE connected_booking_segments (
+    segment_id INT AUTO_INCREMENT PRIMARY KEY,
+    connected_booking_id INT NOT NULL,
+    schedule_id INT NOT NULL,
+    segment_order INT NOT NULL,
+    segment_price DECIMAL(12, 2) NOT NULL,
+    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id),
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id)
+);
+
+USE port;
+
+DROP PROCEDURE IF EXISTS find_direct_routes;
+
+DELIMITER //
+
+CREATE PROCEDURE find_direct_routes(
+    IN p_origin_port_id INT,
+    IN p_destination_port_id INT,
+    IN p_earliest_date VARCHAR(50),
+    IN p_latest_date VARCHAR(50),
+    IN p_cargo_id INT
+)
+BEGIN
+    DECLARE cargo_weight DECIMAL(10,2);
+    DECLARE cargo_type VARCHAR(50);
+    
+    -- Get cargo details
+    SELECT weight, cargo_type INTO cargo_weight, cargo_type
+    FROM cargo
+    WHERE cargo_id = p_cargo_id;
+    
+    -- Find direct routes
+    SELECT 
+        'direct' AS route_type,
+        s.schedule_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        TIMESTAMPDIFF(DAY, s.departure_date, s.arrival_date) AS duration,
+        r.distance,
+        s.max_cargo,
+        cargo_weight,
+        r.cost_per_kg,
+        (cargo_weight * r.cost_per_kg) AS total_cost,
+        p_cargo_id AS cargo_id
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        r.origin_port_id = p_origin_port_id
+        AND r.destination_port_id = p_destination_port_id
+        AND s.departure_date >= STR_TO_DATE(p_earliest_date, '%Y-%m-%d')
+        AND s.arrival_date <= STR_TO_DATE(p_latest_date, '%Y-%m-%d 23:59:59')
+        AND s.status IN ('scheduled', 'in_progress')
+        AND s.max_cargo >= cargo_weight
+    ORDER BY 
+        s.departure_date, total_cost;
+END //
+
+DELIMITER ;
+
+-- Test the procedure
+CALL find_direct_routes(
+    1,              -- NY
+    3,              -- Rotterdam
+    '2023-10-01',   -- Start date
+    '2023-12-31',   -- End date
+    1               -- Cargo ID (Electronics)
+); 
