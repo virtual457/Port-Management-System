@@ -457,7 +457,7 @@
                                             </div>
                                             
                                             <div class="d-grid mt-3">
-                                                <a href="/customer/book-connected-route/{{ option.route_id }}?cargo_id={{ option.cargo_id }}" class="btn btn-success">
+                                                <a href="/customer/book-connected-route/{{ option.schedule_ids }}/{{ option.cargo_id }}/connected/" class="btn btn-success">
                                                     Book This Connection
                                                 </a>
                                             </div>
@@ -547,18 +547,19 @@
                     fetch(`/api/cargo/${cargoId}`)
                         .then(response => response.json())
                         .then(data => {
-                            cargoDescription.textContent = data.description;
-                            cargoType.textContent = data.type.charAt(0).toUpperCase() + data.type.slice(1);
-                            cargoWeight.textContent = data.weight;
+                            cargoDescription.textContent = data.description || 'No description available';
+                            cargoType.textContent = data.type ? data.type.charAt(0).toUpperCase() + data.type.slice(1) : 'Not specified';
+                            cargoWeight.textContent = data.weight || '0';
                             cargoDimensions.textContent = data.dimensions || 'Not specified';
                             cargoDetailsPanel.style.display = 'block';
                         })
                         .catch(error => {
                             console.error('Error fetching cargo details:', error);
                             // Fallback to basic display with available data
-                            cargoDescription.textContent = selectedOption.textContent.split('(')[0].trim();
-                            cargoType.textContent = cargoTypeVal.charAt(0).toUpperCase() + cargoTypeVal.slice(1);
-                            cargoWeight.textContent = cargoWeightVal;
+                            const selectedOption = cargoSelect.options[cargoSelect.selectedIndex];
+                            cargoDescription.textContent = selectedOption.textContent.split('(')[0].trim() || 'No description available';
+                            cargoType.textContent = 'Not specified';
+                            cargoWeight.textContent = selectedOption.dataset.weight || '0';
                             cargoDimensions.textContent = 'Not available';
                             cargoDetailsPanel.style.display = 'block';
                         });
@@ -590,19 +591,19 @@
                 {% for option in shipping_options %}
                     {% if option.route_type == 'direct' %}
                         // Add markers for direct route
-                        const originLatLng = [{{ option.origin_lat }}, {{ option.origin_lng }}];
-                        const destLatLng = [{{ option.destination_lat }}, {{ option.destination_lng }}];
+                        const originLatLng_{{ forloop.counter }} = [{{ option.origin_lat }}, {{ option.origin_lng }}];
+                        const destLatLng_{{ forloop.counter }} = [{{ option.destination_lat }}, {{ option.destination_lng }}];
                         
-                        bounds.push(originLatLng);
-                        bounds.push(destLatLng);
+                        bounds.push(originLatLng_{{ forloop.counter }});
+                        bounds.push(destLatLng_{{ forloop.counter }});
                         
-                        L.marker(originLatLng).addTo(map)
+                        L.marker(originLatLng_{{ forloop.counter }}).addTo(map)
                             .bindPopup('{{ option.origin_port }}');
-                        L.marker(destLatLng).addTo(map)
+                        L.marker(destLatLng_{{ forloop.counter }}).addTo(map)
                             .bindPopup('{{ option.destination_port }}');
                         
                         // Add route line
-                        L.polyline([originLatLng, destLatLng], {
+                        L.polyline([originLatLng_{{ forloop.counter }}, destLatLng_{{ forloop.counter }}], {
                             color: '#0d6efd',
                             weight: 3,
                             opacity: 0.7
@@ -610,19 +611,19 @@
                     {% else %}
                         // Add markers and lines for each segment in a connected route
                         {% for segment in option.segments %}
-                            const segOriginLatLng = [{{ segment.origin_lat }}, {{ segment.origin_lng }}];
-                            const segDestLatLng = [{{ segment.destination_lat }}, {{ segment.destination_lng }}];
+                            const segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }} = [{{ segment.origin_lat }}, {{ segment.origin_lng }}];
+                            const segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }} = [{{ segment.destination_lat }}, {{ segment.destination_lng }}];
                             
-                            bounds.push(segOriginLatLng);
-                            bounds.push(segDestLatLng);
+                            bounds.push(segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }});
+                            bounds.push(segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }});
                             
-                            L.marker(segOriginLatLng).addTo(map)
+                            L.marker(segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}).addTo(map)
                                 .bindPopup('{{ segment.origin_port }}');
-                            L.marker(segDestLatLng).addTo(map)
+                            L.marker(segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}).addTo(map)
                                 .bindPopup('{{ segment.destination_port }}');
                             
                             // Add route line with different color for connected routes
-                            L.polyline([segOriginLatLng, segDestLatLng], {
+                            L.polyline([segOriginLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}, segDestLatLng_{{ forloop.parentloop.counter }}_{{ forloop.counter }}], {
                                 color: '#6f42c1',
                                 weight: 3,
                                 opacity: 0.7,

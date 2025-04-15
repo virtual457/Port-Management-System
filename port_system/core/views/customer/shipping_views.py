@@ -14,7 +14,7 @@ from ..views import role_required
 def find_shipping_options(request):
     """
     View for customers to search for shipping options.
-    Handles both direct and connecting routes.
+    Handles both direct and connecting routes with up to 2 connections.
     """
     print("=== Starting find_shipping_options ===")
     user_id = request.session.get('user_id')
@@ -26,23 +26,22 @@ def find_shipping_options(request):
     
     # Get all available ports for the origin/destination dropdowns
     print("=== Fetching ports ===")
-    print(type(connection))
     with connection.cursor() as cursor:
-        ports=[]
-        print("Cursor type:", type(cursor))
+        ports = []
         cursor.execute("""
-            SELECT port_id, name, country 
+            SELECT port_id, name, country, ST_Y(location) as lat, ST_X(location) as lng
             FROM ports 
             WHERE status = 'active'
             ORDER BY name
         """)
-        print("Ports query executed")
         
         ports = [
             {
                 'id': row[0],
                 'name': row[1],
-                'country': row[2]
+                'country': row[2],
+                'lat': row[3],
+                'lng': row[4]
             }
             for row in cursor.fetchall()
         ]
@@ -57,7 +56,6 @@ def find_shipping_options(request):
             AND status IN ('pending', 'booked')
             ORDER BY created_at DESC
         """, [user_id])
-        print("Cargo query executed")
         
         user_cargo = [
             {
@@ -87,93 +85,99 @@ def find_shipping_options(request):
         cargo_id = request.GET.get('cargo_id')
         earliest_date = request.GET.get('earliest_date')
         latest_date = request.GET.get('latest_date')
-        allow_connections = 'allow_connections' in request.GET
+        max_connections = int(request.GET.get('max_connections', 1)) if 'allow_connections' in request.GET else 0
         
         print(f"Search parameters - Origin: {origin_port_id}, Destination: {destination_port_id}, Cargo: {cargo_id}")
         print(f"Date range - From: {earliest_date}, To: {latest_date}")
-        print(f"Allow connections: {allow_connections}")
+        print(f"Max connections: {max_connections}")
         
         try:
-            print("=== Calling find_direct_routes ===")
+            # Call the find_all_routes procedure which calls find_direct_routes and find_connected_routes
+            print("=== Calling find_all_routes ===")
             with connection.cursor() as cursor:
-                print("Created cursor")
-                print("Cursor type:", type(cursor))
-                print("Parameters being passed to stored procedure:")
-                print(f"Origin Port ID: {origin_port_id}")
-                print(f"Destination Port ID: {destination_port_id}")
-                print(f"Earliest Date: {earliest_date}")
-                print(f"Latest Date: {latest_date}")
-                print(f"Cargo ID: {cargo_id}")
+                cursor.execute("""
+                    CALL find_all_routes(%s, %s, %s, %s, %s, %s)
+                """, [
+                    origin_port_id,
+                    destination_port_id,
+                    earliest_date,
+                    latest_date,
+                    cargo_id,
+                    max_connections
+                ])
                 
-                try:
-                    # Execute the stored procedure using raw SQL
-                    cursor.execute("""
-                        CALL find_direct_routes(%s, %s, %s, %s, %s)
-                    """, [
-                        origin_port_id,
-                        destination_port_id,
-                        earliest_date,
-                        latest_date,
-                        cargo_id
-                    ])
-                    print("Stored procedure called successfully")
-                    
-                    # Get direct routes results
-                    print("Fetching stored procedure results...")
+                # Process direct routes (first result set)
+                if cursor.description:  # Check if we have results
                     columns = [col[0] for col in cursor.description]
-                    print("Columns returned:", columns)
-                    direct_routes = []
                     for row in cursor.fetchall():
                         route_dict = dict(zip(columns, row))
-                        direct_routes.append(route_dict)
-                    print(f"Number of direct routes found: {len(direct_routes)}")
-                    if direct_routes:
-                        print("Direct routes data:", direct_routes)
-                    else:
-                        print("No direct routes found")
-                except Exception as proc_error:
-                    print(f"Error in stored procedure call: {str(proc_error)}")
-                    print(f"Error type: {type(proc_error)}")
-                    raise proc_error
-            
-            # If connections are allowed, find connected routes
-            if allow_connections:
-                print("\nSearching for connected routes...")
-                with connection.cursor() as cursor:
-                    print(f"Calling find_connected_routes with params: {origin_port_id}, {destination_port_id}, {earliest_date}, {latest_date}, {cargo_id}")
-                    try:
-                        # Execute the stored procedure using raw SQL
-                        cursor.execute("""
-                            CALL find_connected_routes(%s, %s, %s, %s, %s)
-                        """, [
-                            origin_port_id,
-                            destination_port_id,
-                            earliest_date,
-                            latest_date,
-                            cargo_id
-                        ])
-                        print("Connected routes procedure called successfully")
-                        
-                        # Get connected routes results
-                        print("Getting stored results...")
-                        columns = [col[0] for col in cursor.description]
-                        connected_routes = []
-                        for row in cursor.fetchall():
-                            route_dict = dict(zip(columns, row))
+                        # Only add to direct_routes if the route_type is actually 'direct'
+                        if route_dict['route_type'] == 'direct':
+                            direct_routes.append(route_dict)
+                        # If it's a connected route, process it and add to connected_routes
+                        elif route_dict['route_type'] == 'connected':
+                            # Get segment details for connected routes
+                            segments = get_connected_route_segments(route_dict['schedule_ids'])
+                            route_dict['segments'] = segments
+                            
+                            # Calculate total duration and connection time
+                            if segments and len(segments) >= 2:
+                                first_departure = segments[0]['departure_date']
+                                last_arrival = segments[-1]['arrival_date']
+                                
+                                # Add first and last port names and total duration
+                                route_dict['first_origin'] = segments[0]['origin_port']
+                                route_dict['last_destination'] = segments[-1]['destination_port']
+                                route_dict['first_departure'] = first_departure
+                                route_dict['last_arrival'] = last_arrival
+                                route_dict['total_duration'] = (last_arrival - first_departure).days
+                                
+                                # Calculate total connection time
+                                total_connection_time = 0
+                                for i in range(len(segments) - 1):
+                                    if 'connection_time' in segments[i]:
+                                        total_connection_time += segments[i]['connection_time']
+                                
+                                route_dict['total_connection_time'] = total_connection_time
+                            
                             connected_routes.append(route_dict)
-                        print(f"Number of connected routes found: {len(connected_routes)}")
-                        if connected_routes:
-                            print("Connected routes data:", connected_routes)
-                        else:
-                            print("No connected routes found")
-                    except Exception as proc_error:
-                        print(f"Error in connected routes procedure call: {str(proc_error)}")
-                        print(f"Error type: {type(proc_error)}")
-                        raise proc_error
+                
+                # Check if there's a second result set with connected routes
+                if max_connections > 0 and cursor.nextset() and cursor.description:
+                    columns = [col[0] for col in cursor.description]
+                    for row in cursor.fetchall():
+                        route_dict = dict(zip(columns, row))
+                        
+                        # Get segment details for connected routes
+                        segments = get_connected_route_segments(route_dict['schedule_ids'])
+                        route_dict['segments'] = segments
+                        
+                        # Calculate total duration and connection time
+                        if segments and len(segments) >= 2:
+                            first_departure = segments[0]['departure_date']
+                            last_arrival = segments[-1]['arrival_date']
+                            
+                            # Add first and last port names and total duration
+                            route_dict['first_origin'] = segments[0]['origin_port']
+                            route_dict['last_destination'] = segments[-1]['destination_port']
+                            route_dict['first_departure'] = first_departure
+                            route_dict['last_arrival'] = last_arrival
+                            route_dict['total_duration'] = (last_arrival - first_departure).days
+                            
+                            # Calculate total connection time
+                            total_connection_time = 0
+                            for i in range(len(segments) - 1):
+                                if 'connection_time' in segments[i]:
+                                    total_connection_time += segments[i]['connection_time']
+                            
+                            route_dict['total_connection_time'] = total_connection_time
+                        
+                        connected_routes.append(route_dict)
+                
+                print(f"Found {len(direct_routes)} direct routes and {len(connected_routes)} connected routes")
             
-            # Combine all routes
-            print(f"Direct routes: {direct_routes}")
-            print(f"Connected routes: {connected_routes}")
+            # Combine all routes for the global shipping_options list
+            # This maintains backward compatibility with the template
             shipping_options = direct_routes + connected_routes
             print(f"Total shipping options: {len(shipping_options)}")
         
@@ -181,6 +185,33 @@ def find_shipping_options(request):
             print(f"Error in find_shipping_options: {str(e)}")
             print(f"Error type: {type(e)}")
             messages.error(request, f"Error searching for shipping options: {str(e)}")
+    
+        # Add latitude/longitude information for direct routes if missing
+        with connection.cursor() as cursor:
+            for route in direct_routes:
+                if 'origin_lat' not in route or 'origin_lng' not in route or 'destination_lat' not in route or 'destination_lng' not in route:
+                    cursor.execute("""
+                        SELECT 
+                            ST_Y(op.location) AS origin_lat,
+                            ST_X(op.location) AS origin_lng,
+                            ST_Y(dp.location) AS destination_lat,
+                            ST_X(dp.location) AS destination_lng
+                        FROM 
+                            routes r
+                        JOIN 
+                            ports op ON r.origin_port_id = op.port_id
+                        JOIN 
+                            ports dp ON r.destination_port_id = dp.port_id
+                        WHERE 
+                            r.route_id = %s
+                    """, [route.get('route_id')])
+                    
+                    loc_data = cursor.fetchone()
+                    if loc_data:
+                        route['origin_lat'] = loc_data[0]
+                        route['origin_lng'] = loc_data[1]
+                        route['destination_lat'] = loc_data[2]
+                        route['destination_lng'] = loc_data[3]
     
     context = {
         'username': username,
@@ -192,8 +223,13 @@ def find_shipping_options(request):
         'connected_routes': connected_routes
     }
     
+    # Debug output
+    print("=== Direct routes ===")
+    print(context.get('direct_routes'))
+    print("=== Connected routes ===")
+    print(context.get('connected_routes'))
+    
     return render(request, 'find_shipping_options.html', context)
-
 
 def get_connected_route_segments(schedule_ids):
     """
@@ -1047,4 +1083,36 @@ def get_cargo_details(request, cargo_id):
             return JsonResponse(cargo)
     
     except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@role_required('customer')
+def test_connected_routes(request):
+    """
+    Test function to call find_connected_routes procedure and display results.
+    """
+    try:
+        with connection.cursor() as cursor:
+            print("Calling find_connected_routes procedure...")
+            cursor.execute("""
+                CALL find_connected_routes(1, 3, '2024-03-01', '2024-03-31', 1)
+            """)
+            
+            # Get the results
+            columns = [col[0] for col in cursor.description]
+            results = []
+            for row in cursor.fetchall():
+                route_dict = dict(zip(columns, row))
+                results.append(route_dict)
+            
+            print(f"Found {len(results)} connected routes")
+            for route in results:
+                print("\nRoute details:")
+                for key, value in route.items():
+                    print(f"{key}: {value}")
+            
+            return JsonResponse({'results': results})
+            
+    except Exception as e:
+        print(f"Error in test_connected_routes: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
