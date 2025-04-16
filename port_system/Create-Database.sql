@@ -19,7 +19,7 @@ CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50),
     first_name VARCHAR(50),
-    last_name VARCHAR(50),
+    last_name VARCHAR(50), 
     phone_number VARCHAR(20),
     password VARCHAR(255) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
@@ -1305,3 +1305,7 @@ END//
 DELIMITER ;
 
 call get_customer_upcoming_shipments(1, 3);
+
+select * from schedules;
+
+select * from routes;

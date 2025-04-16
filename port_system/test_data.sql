@@ -367,3 +367,6 @@ select * from schedules where schedule_id in (49,52);
 select * from routes where route_id in (44,47);
 
 select * from cargo_bookings where user_id = 17;
+
+
+show tables;
