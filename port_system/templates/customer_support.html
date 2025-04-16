@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Support - Shipowner Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .support-card {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 25px;
+        }
+        .faq-item {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+        .faq-question {
+            font-weight: 600;
+            color: #0d6efd;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .faq-answer {
+            padding-top: 10px;
+            display: none;
+        }
+        .faq-answer.show {
+            display: block;
+        }
+        .support-icon {
+            font-size: 3rem;
+            color: #0d6efd;
+        }
+        .support-method {
+            transition: transform 0.3s;
+        }
+        .support-method:hover {
+            transform: translateY(-5px);
+        }
+        .lighthouse {
+            max-width: 150px;
+            position: absolute;
+            right: 30px;
+            top: -50px;
+            animation: sway 3s infinite alternate ease-in-out;
+        }
+        @keyframes sway {
+            0% { transform: rotate(-5deg); }
+            100% { transform: rotate(5deg); }
+        }
+        .ship {
+            position: absolute;
+            bottom: -20px;
+            left: -50px;
+            max-width: 120px;
+            animation: float 4s infinite ease-in-out;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+        .wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%230d6efd" fill-opacity="0.2" d="M0,192L48,181.3C96,171,192,149,288,154.7C384,160,480,192,576,202.7C672,213,768,203,864,186.7C960,171,1056,149,1152,154.7C1248,160,1344,192,1392,208L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+            background-size: cover;
+            background-repeat: no-repeat;
+            z-index: -1;
+        }
+        .sinking {
+            animation: sink 20s infinite linear;
+            position: absolute;
+            width: 80px;
+            right: 50px;
+            bottom: 60px;
+            transform: rotate(45deg);
+        }
+        @keyframes sink {
+            0% { bottom: 60px; opacity: 1; }
+            90% { opacity: 0.3; }
+            100% { bottom: -100px; opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Customer Menu</h5>
+    <hr class="bg-light">
+    <a href="/customer/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/customer/cargo"><i class="bi bi-box-seam me-2"></i> Manage Cargo</a>
+    <a href="/customer/find-shipping"><i class="bi bi-search me-2"></i> Find Shipping</a>
+    <a href="/customer/bookings"><i class="bi bi-calendar-check me-2"></i> My Bookings</a>
+    <a href="/customer/support" class="active"><i class="bi bi-life-preserver me-2"></i> Support</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-ship me-2"></i> Maritime Portal
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Sailor" }}</strong></span>
+            <a href="{% url 'logout' %}" class="btn btn-outline-danger btn-sm">Abandon Ship</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="support-card position-relative overflow-hidden">
+                    <img src="/api/placeholder/150/200" alt="Lighthouse" class="lighthouse" />
+                    <img src="/api/placeholder/120/80" alt="Ship" class="ship" />
+                    <div class="wave"></div>
+                    <img src="/api/placeholder/80/50" alt="Sinking ship" class="sinking" />
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h2 class="mb-4">S.O.S. Support Center</h2>
+                            <p class="lead">Feeling lost at sea with our system? Don't abandon ship just yet!</p>
+                            <p>Our crew of expert navigators is standing by to rescue you from the treacherous waters of technical difficulties.</p>
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i> Support hours: Monday to Friday, 9 AM to 5 PM (Maritime Time) - We're closed during sea storms and pirate attacks.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4 mb-4 mb-md-0">
+                <div class="support-card h-100 support-method text-center">
+                    <i class="bi bi-telephone-fill support-icon mb-3"></i>
+                    <h4>Call Our Crow's Nest</h4>
+                    <p>For urgent issues requiring immediate sailing assistance</p>
+                    <p class="fw-bold">+1-800-SHIP-HELP</p>
+                    <small class="text-muted">(Calls may be recorded for training sailors)</small>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4 mb-md-0">
+                <div class="support-card h-100 support-method text-center">
+                    <i class="bi bi-chat-dots-fill support-icon mb-3"></i>
+                    <h4>Live Message in a Bottle</h4>
+                    <p>Chat with our support crew for real-time navigation</p>
+                    <button class="btn btn-primary mt-2">Start Chat</button>
+                    <small class="text-muted d-block mt-2">Average response time: 2 knots (minutes)</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="support-card h-100 support-method text-center">
+                    <i class="bi bi-envelope-fill support-icon mb-3"></i>
+                    <h4>Send a Naval Dispatch</h4>
+                    <p>Email us for non-urgent maritime matters</p>
+                    <p class="fw-bold">help@maritimeportal.com</p>
+                    <small class="text-muted">We'll respond within 1-2 tides (business days)</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="support-card">
+                    <h3 class="mb-4">Frequently Asked Questions (or "Common Sailor Confusions")</h3>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>Why can't I find my cargo? Has it been lost at sea?</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Unless you're shipping to the Bermuda Triangle, your cargo is likely just fine! Try refreshing the page, checking your filters, or looking under "My Bookings." If all else fails, perhaps the cargo has developed sentience and is taking a vacation. (Just kidding, contact support and we'll help you track it down.)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>Why is shipping so expensive? Are you secretly funding a pirate fleet?</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>While keeping a pirate fleet would certainly be exciting, our prices are based on distance, fuel costs, crew salaries, and the occasional kraken insurance policy. Rest assured, we're constantly working to optimize routes and provide competitive rates. No buried treasure required!</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>My booking was marked "Delivered" but my cargo is still missing!</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Double-check the delivery address - perhaps your cargo was delivered to Davy Jones' Locker instead? More likely, there might be a processing delay at the port. Contact your local port authority or our support team with your booking reference for assistance. We promise we didn't feed it to the sharks.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>Can I ship my mother-in-law?</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>As tempting as it might be, we regret to inform you that human shipping is strictly prohibited by maritime law. Perhaps consider a nice cruise vacation for her instead? We hear the Titanic II is lovely this time of year. (For legal reasons, that's a joke.)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>The system shows no available routes between my ports. What now?</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Either you're trying to ship between alternative dimensions, or we simply don't have established routes between those specific ports yet. Consider nearby ports as alternatives, or contact our business development team to request a new route. If you're really determined, we suggest carrier pigeons (warning: not recommended for packages over 1 ounce).</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFAQ(this)">
+                            <span>I forgot my password. Has it been claimed by the sea?</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Your password hasn't been swallowed by a whale - just click the "Forgot Password" link on the login page. If you're still having trouble, our support team can help you regain access to your account. Just be prepared to answer security questions like "What was the name of your first pet goldfish?" and "If you were a sea creature, what would you be?"</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="support-card">
+                    <h3 class="mb-4">Submit a Help Ticket (S.O.S. Signal)</h3>
+                    <form>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="name" class="form-label">Your Name (Captain)</label>
+                                <input type="text" class="form-control" id="name" placeholder="Captain Morgan">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="email" placeholder="captain@ship.com">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="issueType" class="form-label">Type of Distress Signal</label>
+                                <select class="form-select" id="issueType">
+                                    <option selected disabled>Select issue type</option>
+                                    <option>Technical Malfunction</option>
+                                    <option>Booking Troubles</option>
+                                    <option>Cargo Lost in Cyberspace</option>
+                                    <option>Payment Problems</option>
+                                    <option>Account Access Issues</option>
+                                    <option>Sea Monster Sighting</option>
+                                    <option>Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="urgency" class="form-label">Urgency Level</label>
+                                <select class="form-select" id="urgency">
+                                    <option>Calm Seas (Low)</option>
+                                    <option selected>Choppy Waters (Medium)</option>
+                                    <option>Stormy Weather (High)</option>
+                                    <option>Mayday! Mayday! (Critical)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Describe Your Maritime Emergency</label>
+                            <textarea class="form-control" id="description" rows="4" placeholder="Please provide details of your issue. The more information you provide, the faster we can navigate to a solution."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="attachment" class="form-label">Attach Evidence (Screenshots, Documents)</label>
+                            <input class="form-control" type="file" id="attachment">
+                            <div class="form-text">Acceptable formats: JPG, PNG, PDF, DOC (No treasure maps, please)</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="terms">
+                            <label class="form-check-label" for="terms">
+                                I swear on Poseidon's trident that all information provided is true and accurate
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send me-2"></i> Launch S.O.S. Ticket
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('sidebar-open');
+    });
+
+    document.addEventListener('click', function (event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+
+    // FAQ toggle functionality
+    function toggleFAQ(element) {
+        const answer = element.nextElementSibling;
+        const icon = element.querySelector('i');
+        
+        if (answer.classList.contains('show')) {
+            answer.classList.remove('show');
+            icon.classList.remove('bi-chevron-up');
+            icon.classList.add('bi-chevron-down');
+        } else {
+            answer.classList.add('show');
+            icon.classList.remove('bi-chevron-down');
+            icon.classList.add('bi-chevron-up');
+        }
+    }
+</script>
+</body>
+</html>

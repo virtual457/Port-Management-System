@@ -298,6 +298,26 @@ def get_connected_route_segments(schedule_ids):
 
 
 @role_required('customer')
+def customer_support(request):
+    """
+    View function for the customer support page.
+    
+    This page displays humorous maritime-themed support content,
+    including contact methods, FAQs, and a support ticket form.
+    """
+    # Get the logged-in user's username to display in the navbar
+    username = request.user.username
+    
+    # You can add any context data needed for the template
+    context = {
+        'username': username,
+        # Add other context variables as needed
+        'page_title': 'S.O.S. Support Center',
+    }
+    
+    return render(request, 'customer_support.html', context)
+
+@role_required('customer')
 def book_direct_cargo(request, schedule_id):
     """
     Handle booking cargo on a direct route.
