@@ -239,3 +239,45 @@ INSERT INTO schedules (ship_id, route_id, departure_date, arrival_date, actual_d
 --   WHERE ship_id IN (SELECT ship_id FROM ships WHERE owner_id = @roberto_id);
 -- SELECT 'Connected Bookings Created' AS entity, COUNT(*) AS count FROM connected_bookings
 --   WHERE connected_booking_id >= @connected_booking_solar;
+
+select * from berth_assignments;
+
+-- Step 1: Declare OUT parameters
+SET @p_schedule_id = NULL;
+SET @p_success = FALSE;
+SET @p_message = '';
+
+-- Step 2: Call the procedure with test input values
+CALL create_schedule_with_berths(
+    67,                             -- p_ship_id
+    61,                             -- p_route_id
+    10000.00,                      -- p_max_cargo
+    'scheduled',                  -- p_status
+    'Test voyage schedule',       -- p_notes
+    '2025-04-20 08:00:00',         -- p_departure_date
+    '2025-04-25 20:00:00',         -- p_arrival_date
+    17,                             -- p_origin_berth_id
+    '2025-04-20 06:00:00',         -- p_origin_berth_start
+    '2025-04-20 08:00:00',         -- p_origin_berth_end
+    18,                             -- p_destination_berth_id
+    '2025-04-25 18:00:00',         -- p_destination_berth_start
+    '2025-04-25 20:00:00',         -- p_destination_berth_end
+    @p_schedule_id,                -- OUT
+    @p_success,                    -- OUT
+    @p_message                     -- OUT
+);
+
+-- Step 3: Retrieve the OUT results
+SELECT 
+    @p_schedule_id AS schedule_id,
+    @p_success AS success,
+    @p_message AS message;
+
+
+delete from berth_assignments where true;
+delete from schedules where true;
+
+
+select * from schedules;
+select * from berth_assignments;
+

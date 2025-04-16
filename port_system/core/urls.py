@@ -73,7 +73,7 @@ urlpatterns = [
         
     # Schedules management
     path('shipowner/schedules/', manage_schedules, name='manage-schedules'),
-    path('shipowner/schedules/add/', shipowner_views.add_schedule, name='add-schedule'),
+    path('shipowner/schedules/add/', create_schedule, name='add-schedule'),
     path('shipowner/schedules/edit/', shipowner_views.edit_schedule, name='edit-schedule'),
     path('shipowner/schedules/delete/', shipowner_views.delete_schedule, name='delete-schedule'),
 

@@ -99,34 +99,76 @@ def create_schedule(request):
         messages.error(request, "All fields are required")
         return redirect('create-schedule-form')
     
+    # Validate time ranges
+    try:
+        # Convert string dates to datetime objects
+        from datetime import datetime
+        o_start = datetime.strptime(origin_berth_start, '%Y-%m-%d %H:%M')
+        o_end = datetime.strptime(origin_berth_end, '%Y-%m-%d %H:%M')
+        d_start = datetime.strptime(destination_berth_start, '%Y-%m-%d %H:%M')
+        d_end = datetime.strptime(destination_berth_end, '%Y-%m-%d %H:%M')
+        
+        # Validate origin berth times
+        if o_start >= o_end:
+            messages.error(request, "Origin berth booking: Start time must be earlier than end time")
+            return redirect('create-schedule-form')
+        
+        # Validate destination berth times
+        if d_start >= d_end:
+            messages.error(request, "Destination berth booking: Start time must be earlier than end time")
+            return redirect('create-schedule-form')
+            
+    except ValueError as e:
+        messages.error(request, f"Invalid date format: {str(e)}")
+        return redirect('create-schedule-form')
+    
+    print("calling create schedule with berths")
     # Use stored procedure to create schedule with berth assignments
     with connection.cursor() as cursor:
-        # Set up OUT parameters
-        cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
-        
-        # Call the procedure
-        cursor.callproc(
-            'create_schedule_with_berths', 
-            [
-                ship_id, route_id, max_cargo, status, notes,
-                departure_date, arrival_date,
-                origin_berth_id, origin_berth_start, origin_berth_end,
-                destination_berth_id, destination_berth_start, destination_berth_end,
-                0, False, ''  # Output parameters placeholders
-            ]
-        )
-        
-        # Get output parameters
-        cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
-        schedule_id, success, message = cursor.fetchone()
-        
-        if success:
-            messages.success(request, message)
-            return redirect('manage-schedules')
-        else:
-            messages.error(request, message)
-            return redirect('create-schedule-form')
+        try:
+            # Set up OUT parameters
+            cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
 
+            # Escape notes to prevent SQL injection
+            import pymysql
+            safe_notes = pymysql.converters.escape_string(notes)
+            
+            # Call the stored procedure
+            cursor.execute(f"""
+            CALL create_schedule_with_berths(
+                {ship_id}, {route_id}, {max_cargo}, '{status}', '{safe_notes}',
+                '{departure_date}', '{arrival_date}',
+                {origin_berth_id}, '{origin_berth_start}', '{origin_berth_end}',
+                {destination_berth_id}, '{destination_berth_start}', '{destination_berth_end}',
+                @p_schedule_id, @p_success, @p_message
+            );
+            """)
+            
+            # Get output parameters
+            cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
+            schedule_id, success, message = cursor.fetchone()
+            print("schedule_id", schedule_id)
+            print("success", success)
+            print("message", message)
+            
+            if success:
+                messages.success(request, message)
+                return redirect('manage-schedules')
+            else:
+                messages.error(request, message)
+                return redirect('create-schedule-form')
+                
+        except Exception as e:
+            # Log the error for debugging
+            print(f"Error creating schedule: {str(e)}")
+            
+            # Handle constraint violation specifically
+            if "valid_assignment_times" in str(e):
+                messages.error(request, "Berth booking times are invalid: arrival time must be earlier than departure time")
+            else:
+                messages.error(request, f"Error creating schedule: {str(e)}")
+            
+            return redirect('create-schedule-form')
 
 def get_available_berths(request, port_id):
     """

@@ -799,6 +799,45 @@ function checkBerthAvailability(portType) {
     });
 }
 
+// Add this function to your JavaScript
+function validateBerthTimes() {
+    // Origin berth times
+    const originStart = new Date(document.getElementById('originBerthStart').value);
+    const originEnd = new Date(document.getElementById('originBerthEnd').value);
+    
+    // Destination berth times
+    const destinationStart = new Date(document.getElementById('destinationBerthStart').value);
+    const destinationEnd = new Date(document.getElementById('destinationBerthEnd').value);
+    
+    // Validate times
+    let isValid = true;
+    let errorMessages = [];
+    
+    if (originStart >= originEnd) {
+        isValid = false;
+        errorMessages.push("Origin berth booking: Start time must be earlier than end time");
+    }
+    
+    if (destinationStart >= destinationEnd) {
+        isValid = false;
+        errorMessages.push("Destination berth booking: Start time must be earlier than end time");
+    }
+    
+    // Display error messages if any
+    if (!isValid) {
+        alert("Please correct the following errors:\n- " + errorMessages.join("\n- "));
+    }
+    
+    return isValid;
+}
+
+// Update your form submission to include validation
+document.getElementById('scheduleForm').addEventListener('submit', function(event) {
+    if (!validateBerthTimes()) {
+        event.preventDefault(); // Prevent form submission
+    }
+});
+
 </script>
 </body>
 </html>
