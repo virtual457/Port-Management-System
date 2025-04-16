@@ -1,1 +1,3 @@
 venv/
+port_system/test_data copy.sql
+port_system/settings.py
