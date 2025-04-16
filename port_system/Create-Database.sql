@@ -611,7 +611,7 @@ select * from user_roles where user_id = 1;
 select * from users;
 
 
----New ADditions
+-- New ADditions
 CREATE TABLE connected_bookings (
     connected_booking_id INT AUTO_INCREMENT PRIMARY KEY,
     cargo_id INT NOT NULL,
@@ -962,7 +962,7 @@ CREATE INDEX idx_segment_order ON connected_booking_segments(segment_order);
 
 -- Create stored procedure to get booking details
 DELIMITER //
-CREATE PROCEDURE IF NOT EXISTS get_booking_details(IN p_booking_id INT, IN p_user_id INT)
+CREATE PROCEDURE get_booking_details(IN p_booking_id INT, IN p_user_id INT)
 BEGIN
     SELECT 
         b.booking_id,
@@ -1005,7 +1005,7 @@ DELIMITER ;
 
 -- Create stored procedure to get connected booking details
 DELIMITER //
-CREATE PROCEDURE IF NOT EXISTS get_connected_booking_details(IN p_booking_id INT, IN p_user_id INT)
+CREATE PROCEDURE get_connected_booking_details(IN p_booking_id INT, IN p_user_id INT)
 BEGIN
     -- Get main booking info
     SELECT 
@@ -1068,7 +1068,7 @@ DELIMITER ;
 
 -- Create trigger to handle cargo status updates when a booking is made
 DELIMITER //
-CREATE TRIGGER IF NOT EXISTS after_booking_insert
+CREATE TRIGGER after_booking_insert
 AFTER INSERT ON cargo_bookings
 FOR EACH ROW
 BEGIN
@@ -1081,7 +1081,7 @@ DELIMITER ;
 
 -- Create trigger to handle cargo status updates when a connected booking is made
 DELIMITER //
-CREATE TRIGGER IF NOT EXISTS after_connected_booking_insert
+CREATE TRIGGER after_connected_booking_insert
 AFTER INSERT ON connected_bookings
 FOR EACH ROW
 BEGIN
@@ -1094,7 +1094,7 @@ DELIMITER ;
 
 -- Create trigger to handle cargo status updates when a booking is cancelled
 DELIMITER //
-CREATE TRIGGER IF NOT EXISTS after_booking_update
+CREATE TRIGGER after_booking_update
 AFTER UPDATE ON cargo_bookings
 FOR EACH ROW
 BEGIN
@@ -1109,7 +1109,7 @@ DELIMITER ;
 
 -- Create trigger to handle cargo status updates when a connected booking is cancelled
 DELIMITER //
-CREATE TRIGGER IF NOT EXISTS after_connected_booking_update
+CREATE TRIGGER after_connected_booking_update
 AFTER UPDATE ON connected_bookings
 FOR EACH ROW
 BEGIN
