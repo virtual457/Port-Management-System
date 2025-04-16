@@ -281,3 +281,5 @@ delete from schedules where true;
 select * from schedules;
 select * from berth_assignments;
 
+select * from schedules;
+

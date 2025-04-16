@@ -568,9 +568,10 @@ def manage_routes(request):
 def add_route(request):
     """
     View function for adding a new route.
-    Inserts route information into the database.
+    Uses a stored procedure to add the route with proper validation.
     """
     if request.method == 'POST':
+        # Get all form fields
         name = request.POST.get('name')
         origin_port = request.POST.get('origin_port')
         destination_port = request.POST.get('destination_port')
@@ -578,7 +579,6 @@ def add_route(request):
         duration = request.POST.get('duration')
         status = request.POST.get('status')
         cost_per_kg = request.POST.get('cost_per_kg') or 0.00
-        ship_id = request.POST.get('ship_id') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -587,33 +587,29 @@ def add_route(request):
             messages.error(request, "Required fields are missing.")
             return redirect('manage-routes')
         
-        # Check if origin and destination are different
-        if origin_port == destination_port:
-            messages.error(request, "Origin and destination ports cannot be the same.")
-            return redirect('manage-routes')
-        
         try:
             with connection.cursor() as cursor:
-                # Check if ship belongs to user if ship_id is provided
-                if ship_id:
-                    cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
-                    if cursor.fetchone()[0] == 0:
-                        messages.error(request, "The selected ship does not belong to you.")
-                        return redirect('manage-routes')
-                
-                # Insert route
+
+                cursor.execute("SET @route_id = 0, @success = FALSE, @message = '';")
+                # Call the stored procedure to add the route
                 cursor.execute("""
-                    INSERT INTO routes (
-                        name, origin_port_id, destination_port_id, 
-                        distance, duration, status, owner_id, cost_per_kg, ship_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, [name, origin_port, destination_port, distance, duration, status, user_id, cost_per_kg, ship_id])
+                    CALL add_route(%s, %s, %s, %s, %s, %s, %s, %s, @route_id, @success, @message)
+                """, [name, origin_port, destination_port, distance, duration, status, cost_per_kg, user_id])
                 
-            messages.success(request, f"Route '{name}' added successfully!")
+                # Get the results from the stored procedure
+                cursor.execute("SELECT @route_id, @success, @message")
+                result = cursor.fetchone()
+                route_id, success, message = result
+                
+                if success:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
+                
+            return redirect('manage-routes')
         except Exception as e:
             messages.error(request, f"Error adding route: {str(e)}")
-        
-        return redirect('manage-routes')
+            return redirect('manage-routes')
     
     # If not POST, redirect back to manage routes page
     return redirect('manage-routes')
@@ -633,7 +629,6 @@ def edit_route(request):
         duration = request.POST.get('duration')
         status = request.POST.get('status')
         cost_per_kg = request.POST.get('cost_per_kg') or 0.00
-        ship_id = request.POST.get('ship_id') or None
         
         # Get user_id from session
         user_id = request.session.get('user_id')
@@ -656,20 +651,13 @@ def edit_route(request):
                     messages.error(request, "You do not have permission to edit this route.")
                     return redirect('manage-routes')
                 
-                # Check if ship belongs to user if ship_id is provided
-                if ship_id:
-                    cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
-                    if cursor.fetchone()[0] == 0:
-                        messages.error(request, "The selected ship does not belong to you.")
-                        return redirect('manage-routes')
-                
-                # Update route
+                # Update route - Note: Removed ship_id from the update
                 cursor.execute("""
                     UPDATE routes SET 
                         name = %s, origin_port_id = %s, destination_port_id = %s,
-                        distance = %s, duration = %s, status = %s, cost_per_kg = %s, ship_id = %s
+                        distance = %s, duration = %s, status = %s, cost_per_kg = %s
                     WHERE route_id = %s AND owner_id = %s
-                """, [name, origin_port, destination_port, distance, duration, status, cost_per_kg, ship_id, route_id, user_id])
+                """, [name, origin_port, destination_port, distance, duration, status, cost_per_kg, route_id, user_id])
                 
             messages.success(request, f"Route '{name}' updated successfully!")
         except Exception as e:

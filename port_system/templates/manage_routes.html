@@ -157,13 +157,13 @@
 
         <!-- Messages/Alerts section -->
         {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
+    {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
 
         <!-- Routes Table -->
         <div class="table-responsive">
@@ -200,42 +200,39 @@
                             </td>
                             <td class="text-center">
                                 <button type="button"
-                                    class="btn btn-outline-info btn-sm view-route-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#viewRouteModal"
-                                    data-id="{{ route.id }}"
-                                    data-name="{{ route.name }}"
-                                    data-origin-id="{{ route.origin_id }}"
-                                    data-origin-name="{{ route.origin_port }}"
-                                    data-origin-lat="{{ route.origin_lat }}"
-                                    data-origin-lng="{{ route.origin_lng }}"
-                                    data-destination-id="{{ route.destination_id }}"
-                                    data-destination-name="{{ route.destination_port }}"
-                                    data-destination-lat="{{ route.destination_lat }}"
-                                    data-destination-lng="{{ route.destination_lng }}"
-                                    data-distance="{{ route.distance }}"
-                                    data-duration="{{ route.duration }}"
-                                    data-status="{{ route.status }}"
-                                    data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}"
-                                    data-ship-id="{{ route.ship_id }}"
-                                    data-ship-name="{{ route.ship_name|default:'None' }}">
-                                    Details
-                                </button>
-                                <button type="button"
-                                    class="btn btn-outline-primary btn-sm edit-route-btn"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#editRouteModal"
-                                    data-id="{{ route.id }}"
-                                    data-name="{{ route.name }}"
-                                    data-origin-id="{{ route.origin_id }}"
-                                    data-destination-id="{{ route.destination_id }}"
-                                    data-distance="{{ route.distance }}"
-                                    data-duration="{{ route.duration }}"
-                                    data-status="{{ route.status }}"
-                                    data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}"
-                                    data-ship-id="{{ route.ship_id }}">
-                                    Edit
-                                </button>
+    class="btn btn-outline-info btn-sm view-route-btn"
+    data-bs-toggle="modal"
+    data-bs-target="#viewRouteModal"
+    data-id="{{ route.id }}"
+    data-name="{{ route.name }}"
+    data-origin-id="{{ route.origin_id }}"
+    data-origin-name="{{ route.origin_port }}"
+    data-origin-lat="{{ route.origin_lat }}"
+    data-origin-lng="{{ route.origin_lng }}"
+    data-destination-id="{{ route.destination_id }}"
+    data-destination-name="{{ route.destination_port }}"
+    data-destination-lat="{{ route.destination_lat }}"
+    data-destination-lng="{{ route.destination_lng }}"
+    data-distance="{{ route.distance }}"
+    data-duration="{{ route.duration }}"
+    data-status="{{ route.status }}"
+    data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}">
+    Details
+</button>
+<button type="button"
+class="btn btn-outline-primary btn-sm edit-route-btn"
+data-bs-toggle="modal"
+data-bs-target="#editRouteModal"
+data-id="{{ route.id }}"
+data-name="{{ route.name }}"
+data-origin-id="{{ route.origin_id }}"
+data-destination-id="{{ route.destination_id }}"
+data-distance="{{ route.distance }}"
+data-duration="{{ route.duration }}"
+data-status="{{ route.status }}"
+data-cost-per-kg="{{ route.cost_per_kg|default:'0.00' }}">
+Edit
+</button>
                                 <button type="button"
                                     class="btn btn-outline-danger btn-sm delete-route-btn"
                                     data-bs-toggle="modal"
@@ -340,17 +337,14 @@
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="createRouteShip" class="form-label">Assign Ship (Optional)</label>
-                            <select class="form-select" id="createRouteShip" name="ship_id">
-                                <option value="" selected>Select Ship</option>
-                                {% for ship in ships %}
-                                    <option value="{{ ship.id }}">{{ ship.name }}</option>
-                                {% endfor %}
-                            </select>
+                            <label for="createRouteCostPerKg" class="form-label">Cost per Kg (Price)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" min="0" class="form-control" id="createRouteCostPerKg" name="cost_per_kg" value="0.00" required>
+                            </div>
+                            <div class="form-text">Set the price per kilogram for cargo transportation on this route.</div>
                         </div>
                     </div>
-                    <!-- Hidden cost_per_kg field to maintain compatibility with backend -->
-                    <input type="hidden" id="createRouteCostPerKg" name="cost_per_kg" value="0.00">
                 </form>
             </div>
             <div class="modal-footer">
@@ -401,10 +395,10 @@
                         <p id="viewRouteStatus"></p>
                     </div>
                 </div>
-                <div class="row">
+                <div class="row mb-3">
                     <div class="col-md-12">
-                        <h6>Assigned Ship</h6>
-                        <p id="viewRouteShip">None</p>
+                        <h6>Cost per Kg</h6>
+                        <p id="viewRouteCostPerKg"></p>
                     </div>
                 </div>
             </div>
@@ -474,17 +468,14 @@
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="editRouteShip" class="form-label">Assign Ship (Optional)</label>
-                            <select class="form-select" id="editRouteShip" name="ship_id">
-                                <option value="">Select Ship</option>
-                                {% for ship in ships %}
-                                    <option value="{{ ship.id }}">{{ ship.name }}</option>
-                                {% endfor %}
-                            </select>
+                            <label for="editRouteCostPerKg" class="form-label">Cost per Kg (Price)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" min="0" class="form-control" id="editRouteCostPerKg" name="cost_per_kg" required>
+                            </div>
+                            <div class="form-text">Update the price per kilogram for cargo transportation on this route.</div>
                         </div>
                     </div>
-                    <!-- Hidden cost_per_kg field to maintain compatibility with backend -->
-                    <input type="hidden" id="editRouteCostPerKg" name="cost_per_kg" value="0.00">
                 </form>
             </div>
             <div class="modal-footer">
@@ -656,30 +647,30 @@
         const viewRouteModal = document.getElementById('viewRouteModal');
         if (viewRouteModal) {
             viewRouteModal.addEventListener('show.bs.modal', function (event) {
-                const button = event.relatedTarget;
-                
-                // Extract data from button attributes
-                const id = button.getAttribute('data-id');
-                const name = button.getAttribute('data-name');
-                const originName = button.getAttribute('data-origin-name');
-                const originLat = parseFloat(button.getAttribute('data-origin-lat'));
-                const originLng = parseFloat(button.getAttribute('data-origin-lng'));
-                const destName = button.getAttribute('data-destination-name');
-                const destLat = parseFloat(button.getAttribute('data-destination-lat'));
-                const destLng = parseFloat(button.getAttribute('data-destination-lng'));
-                const distance = button.getAttribute('data-distance');
-                const duration = button.getAttribute('data-duration');
-                const status = button.getAttribute('data-status');
-                const shipName = button.getAttribute('data-ship-name') || 'None';
-                
-                // Update modal content
-                document.getElementById('viewRouteName').textContent = name;
-                document.getElementById('viewRouteOrigin').textContent = originName;
-                document.getElementById('viewRouteDestination').textContent = destName;
-                document.getElementById('viewRouteDistance').textContent = `${distance} Nautical Miles`;
-                document.getElementById('viewRouteDuration').textContent = `${duration} days`;
-                document.getElementById('viewRouteShip').textContent = shipName;
-                
+    const button = event.relatedTarget;
+    
+    // Extract data from button attributes
+    const id = button.getAttribute('data-id');
+    const name = button.getAttribute('data-name');
+    const originName = button.getAttribute('data-origin-name');
+    const originLat = parseFloat(button.getAttribute('data-origin-lat'));
+    const originLng = parseFloat(button.getAttribute('data-origin-lng'));
+    const destName = button.getAttribute('data-destination-name');
+    const destLat = parseFloat(button.getAttribute('data-destination-lat'));
+    const destLng = parseFloat(button.getAttribute('data-destination-lng'));
+    const distance = button.getAttribute('data-distance');
+    const duration = button.getAttribute('data-duration');
+    const status = button.getAttribute('data-status');
+    const costPerKg = button.getAttribute('data-cost-per-kg') || '0.00';
+    
+    // Update modal content
+    document.getElementById('viewRouteName').textContent = name;
+    document.getElementById('viewRouteOrigin').textContent = originName;
+    document.getElementById('viewRouteDestination').textContent = destName;
+    document.getElementById('viewRouteDistance').textContent = `${distance} Nautical Miles`;
+    document.getElementById('viewRouteDuration').textContent = `${duration} days`;
+    document.getElementById('viewRouteCostPerKg').textContent = `$${parseFloat(costPerKg).toFixed(2)}`;
+    
                 const statusElement = document.getElementById('viewRouteStatus');
                 let statusHtml = '';
                 
@@ -774,7 +765,6 @@
                 document.getElementById('editRouteDuration').value = duration;
                 document.getElementById('editRouteStatus').value = status;
                 document.getElementById('editRouteCostPerKg').value = costPerKg;
-                document.getElementById('editRouteShip').value = shipId;
                 
                 // Initialize map after modal is shown
                 editRouteModal.addEventListener('shown.bs.modal', function() {

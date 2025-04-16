@@ -1685,3 +1685,89 @@ BEGIN
 END//
 
 DELIMITER ;
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS add_route //
+
+CREATE PROCEDURE add_route(
+    IN p_name VARCHAR(100),
+    IN p_origin_port_id INT,
+    IN p_destination_port_id INT,
+    IN p_distance DECIMAL(10, 2),
+    IN p_duration DECIMAL(6, 2),
+    IN p_status VARCHAR(20),
+    IN p_cost_per_kg DECIMAL(10, 2),
+    IN p_owner_id INT,
+    OUT p_route_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE valid_ports INT;
+    DECLARE route_exists INT;
+    
+    -- Check if both ports exist and are active
+    SELECT COUNT(*) INTO valid_ports 
+    FROM ports p1, ports p2
+    WHERE p1.port_id = p_origin_port_id 
+      AND p2.port_id = p_destination_port_id
+      AND p1.status = 'active'
+      AND p2.status = 'active';
+    
+    -- Check if this route already exists for this owner
+    SELECT COUNT(*) INTO route_exists
+    FROM routes
+    WHERE owner_id = p_owner_id
+      AND origin_port_id = p_origin_port_id
+      AND destination_port_id = p_destination_port_id
+      AND status != 'deleted';
+      
+    -- Begin validation checks
+    IF p_origin_port_id = p_destination_port_id THEN
+        SET p_success = FALSE;
+        SET p_message = 'Origin and destination ports cannot be the same.';
+    ELSEIF valid_ports < 1 THEN
+        SET p_success = FALSE;
+        SET p_message = 'One or both ports do not exist or are not active.';
+    ELSEIF p_distance <= 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'Distance must be greater than zero.';
+    ELSEIF p_duration <= 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'Duration must be greater than zero.';
+    ELSEIF route_exists > 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'A route between these ports already exists. Please edit the existing route instead.';
+    ELSEIF p_cost_per_kg <= 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'Cost per kg cannot be negative or zero. You might loose a lot of money.';
+    ELSE
+        -- All validations passed, insert the route
+        INSERT INTO routes (
+            name, 
+            origin_port_id, 
+            destination_port_id, 
+            distance, 
+            duration, 
+            status, 
+            owner_id, 
+            cost_per_kg
+        ) VALUES (
+            p_name,
+            p_origin_port_id,
+            p_destination_port_id,
+            p_distance,
+            p_duration,
+            p_status,
+            p_owner_id,
+            p_cost_per_kg
+        );
+        
+        SET p_route_id = LAST_INSERT_ID();
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Route "', p_name, '" created successfully!');
+    END IF;
+END//
+
+DELIMITER ;
