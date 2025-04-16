@@ -431,9 +431,11 @@ CREATE TABLE berths (
     berth_id INT AUTO_INCREMENT PRIMARY KEY,
     berth_number VARCHAR(20) NOT NULL,
     port_id INT NOT NULL,
-    status ENUM('available', 'occupied', 'maintenance', 'reserved') NOT NULL DEFAULT 'available',
-    capacity DECIMAL(12, 2) NOT NULL COMMENT 'Maximum weight capacity in tons',
-    berth_type ENUM('container', 'bulk', 'tanker', 'roro', 'general') NOT NULL DEFAULT 'general',
+    type VARCHAR(50) NOT NULL DEFAULT 'container',  -- Changed from berth_type to type
+    length DECIMAL(10, 2) NOT NULL,  -- Added length field instead of capacity
+    width DECIMAL(10, 2) NOT NULL,   -- Added width field
+    depth DECIMAL(10, 2) NOT NULL,   -- Added depth field
+    status VARCHAR(20) NOT NULL DEFAULT 'active',  -- Changed from ENUM to VARCHAR
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (port_id) REFERENCES ports(port_id) ON DELETE CASCADE
@@ -457,17 +459,17 @@ CREATE TABLE berth_assignments (
 );
 
 -- Add some sample data for berths
-INSERT INTO berths (berth_number, port_id, status, capacity, berth_type) VALUES
-('B001', 1, 'available', 50000.00, 'container'),
-('B002', 1, 'available', 30000.00, 'bulk'),
-('B003', 1, 'available', 60000.00, 'tanker'),
-('B004', 2, 'available', 40000.00, 'container'),
-('B005', 2, 'available', 25000.00, 'bulk'),
-('B006', 3, 'available', 55000.00, 'container'),
-('B007', 3, 'available', 35000.00, 'tanker'),
-('B008', 4, 'available', 45000.00, 'container'),
-('B009', 5, 'available', 30000.00, 'roro'),
-('B010', 6, 'available', 50000.00, 'container');
+INSERT INTO berths (berth_number, port_id, type, length, width, depth, status) VALUES
+('B001', 1, 'container', 300.00, 50.00, 15.00, 'active'),
+('B002', 1, 'bulk', 250.00, 40.00, 12.00, 'active'),
+('B003', 1, 'tanker', 350.00, 60.00, 18.00, 'maintenance'),
+('B004', 2, 'container', 300.00, 50.00, 15.00, 'active'),
+('B005', 2, 'bulk', 250.00, 40.00, 12.00, 'active'),
+('B006', 3, 'container', 320.00, 55.00, 16.00, 'active'),
+('B007', 3, 'tanker', 360.00, 65.00, 19.00, 'active'),
+('B008', 4, 'container', 305.00, 52.00, 15.50, 'active'),
+('B009', 5, 'roro', 280.00, 60.00, 12.00, 'active'),
+('B010', 6, 'container', 310.00, 53.00, 16.00, 'active');
 
 -- Create a stored procedure to automatically assign a berth when a schedule is created
 DELIMITER //
