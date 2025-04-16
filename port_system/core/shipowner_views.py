@@ -937,100 +937,7 @@ def manage_schedules(request):
     
     return render(request, 'manage_schedules.html', context)
 
-@shipowner_required
-def add_schedule_page(request):
-    """
-    View function for displaying the add schedule form.
-    """
-    # Get user_id from session
-    user_id = request.session.get('user_id')
-    
-    with connection.cursor() as cursor:
-        # Get username
-        cursor.execute("SELECT get_username(%s)", [user_id])
-        username = cursor.fetchone()[0]
-        
-        # Get all active ships owned by the shipowner
-        cursor.execute("""
-            SELECT s.ship_id, s.name, s.ship_type, s.capacity, s.current_port_id, p.name as current_port_name
-            FROM ships s
-            LEFT JOIN ports p ON s.current_port_id = p.port_id
-            WHERE s.owner_id = %s AND s.status != 'deleted'
-            ORDER BY s.name
-        """, [user_id])
-        ships_raw = cursor.fetchall()
-        
-        # Get all active routes owned by the shipowner
-        cursor.execute("""
-            SELECT r.route_id, r.name, r.origin_port_id, r.destination_port_id, 
-                   r.distance, r.duration, po.name as origin_port, pd.name as destination_port
-            FROM routes r
-            JOIN ports po ON r.origin_port_id = po.port_id
-            JOIN ports pd ON r.destination_port_id = pd.port_id
-            WHERE r.owner_id = %s AND r.status != 'deleted'
-            ORDER BY r.name
-        """, [user_id])
-        routes_raw = cursor.fetchall()
-        
-        # Get all active ports for reference
-        cursor.execute("""
-            SELECT port_id, name, country
-            FROM ports 
-            WHERE status = 'active'
-            ORDER BY name
-        """)
-        ports_raw = cursor.fetchall()
-    
-    # Transform raw data to dictionary list
-    ships_list = [
-        {
-            'id': row[0],
-            'name': row[1],
-            'type': row[2],
-            'capacity': row[3],
-            'current_port_id': row[4],
-            'current_port_name': row[5]
-        }
-        for row in ships_raw
-    ]
-    
-    routes_list = [
-        {
-            'id': row[0],
-            'name': row[1],
-            'origin_id': row[2],
-            'destination_id': row[3],
-            'distance': row[4],
-            'duration': row[5],
-            'origin_port': row[6],
-            'destination_port': row[7]
-        }
-        for row in routes_raw
-    ]
-    
-    ports_list = [
-        {
-            'id': row[0],
-            'name': row[1],
-            'country': row[2]
-        }
-        for row in ports_raw
-    ]
-    
-    # Add JSON serialized data for JavaScript
-    import json
-    
-    context = {
-        'ships': ships_list,
-        'routes': routes_list,
-        'ports': ports_list,
-        'ports_json': json.dumps(ports_list),  # Add this line
-        'username': username
-    }
-    
-    return render(request, 'add_schedule.html', context)
 
-@shipowner_required
 @shipowner_required
 def add_schedule(request):
     """
@@ -1053,7 +960,7 @@ def add_schedule(request):
         
         if not (ship_id and route_id and departure_date and arrival_date):
             messages.error(request, "Required fields are missing.")
-            return redirect('add-schedule-page')
+            return redirect('create-schedule-form')
         
         try:
             # Parse dates
@@ -1063,20 +970,20 @@ def add_schedule(request):
             # Validate that arrival is after departure
             if arrival_datetime <= departure_datetime:
                 messages.error(request, "Arrival date must be after departure date.")
-                return redirect('add-schedule-page')
+                return redirect('create-schedule-form')
             
             with connection.cursor() as cursor:
                 # Check if ship belongs to user
                 cursor.execute("SELECT COUNT(*) FROM ships WHERE ship_id = %s AND owner_id = %s", [ship_id, user_id])
                 if cursor.fetchone()[0] == 0:
                     messages.error(request, "You don't have permission to schedule this ship.")
-                    return redirect('add-schedule-page')
+                    return redirect('create-schedule-form')
                 
                 # Check if route belongs to user
                 cursor.execute("SELECT COUNT(*) FROM routes WHERE route_id = %s AND owner_id = %s", [route_id, user_id])
                 if cursor.fetchone()[0] == 0:
                     messages.error(request, "You don't have permission to use this route.")
-                    return redirect('add-schedule-page')
+                    return redirect('create-schedule-form')
                 
                 # Check for scheduling conflicts (overlapping schedules for the same ship)
                 cursor.execute("""
@@ -1093,7 +1000,7 @@ def add_schedule(request):
                 
                 if cursor.fetchone()[0] > 0:
                     messages.error(request, "This ship is already scheduled during the selected time period.")
-                    return redirect('add-schedule-page')
+                    return redirect('create-schedule-form')
                 
                 # Get ship details
                 cursor.execute("""
@@ -1167,7 +1074,7 @@ def add_schedule(request):
         return redirect('manage-schedules')
     
     # If not POST, redirect to the add schedule form page
-    return redirect('add-schedule-page')
+    return redirect('create-schedule-form')
 
 @shipowner_required
 def edit_schedule(request):
