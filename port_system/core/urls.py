@@ -51,6 +51,8 @@ urlpatterns = [
     path('admin/manage-ports/', views.admin_manage_ports, name='manage-ports'), 
     path('admin/ports/add/', views.admin_ports_add, name='add-ports'),
 
+    path('api/check-berth-availability/', check_berth_availability_ajax, name='check-berth-availability'),
+
     # Shipowner dashboard
     path('shipowner/dashboard/', shipowner_views.shipowner_dashboard, name='shipowner-dashboard'),
 

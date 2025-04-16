@@ -1351,3 +1351,337 @@ END//
 
 DELIMITER ;
 
+
+-- Drop the table if it exists
+DROP TABLE IF EXISTS berth_assignments;
+
+
+CREATE TABLE berth_assignments (
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+    berth_id INT NOT NULL,
+    ship_id INT NOT NULL,
+    schedule_id INT NOT NULL,
+    arrival_time DATETIME NOT NULL,
+    departure_time DATETIME NOT NULL,
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+ALTER TABLE berth_assignments
+ADD CONSTRAINT fk_berth
+    FOREIGN KEY (berth_id) REFERENCES berths(berth_id) ON DELETE CASCADE,
+ADD CONSTRAINT fk_ship
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE,
+ADD CONSTRAINT fk_schedule
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE;
+
+
+ALTER TABLE berth_assignments
+ADD CONSTRAINT valid_assignment_times
+CHECK (arrival_time < departure_time);
+
+
+show create table berth_assignments;
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_available_berths //
+
+CREATE PROCEDURE get_available_berths(
+    IN p_port_id INT,
+    IN p_start_time DATETIME,
+    IN p_end_time DATETIME
+)
+BEGIN
+    -- Get all available berths from the specified port
+    -- that are marked as active
+    -- and are not already booked during the requested time period
+    SELECT 
+        b.berth_id,
+        b.berth_number,
+        b.type,
+        b.length,
+        b.width,
+        b.depth,
+        b.status
+    FROM 
+        berths b
+    WHERE 
+        b.port_id = p_port_id
+        AND b.status = 'active'
+        AND NOT EXISTS (
+            -- Check for overlapping berth assignments
+            SELECT 1
+            FROM berth_assignments ba
+            WHERE ba.berth_id = b.berth_id
+              AND ba.status = 'active'
+              AND (
+                  -- New booking starts during existing booking
+                  (p_start_time BETWEEN ba.arrival_time AND ba.departure_time)
+                  -- New booking ends during existing booking
+                  OR (p_end_time BETWEEN ba.arrival_time AND ba.departure_time)
+                  -- New booking completely contains existing booking
+                  OR (p_start_time <= ba.arrival_time AND p_end_time >= ba.departure_time)
+              )
+        )
+    ORDER BY 
+        b.berth_number;
+END//
+
+DELIMITER ;
+
+CALL get_available_berths(
+    1, 
+    '2025-04-20 08:00:00', 
+    '2025-04-20 18:00:00'
+);
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS check_berth_availability //
+
+CREATE PROCEDURE check_berth_availability(
+    IN p_berth_id INT,
+    IN p_start_time DATETIME,
+    IN p_end_time DATETIME,
+    OUT p_is_available BOOLEAN,
+    OUT p_conflict_details VARCHAR(255)
+)
+BEGIN
+    DECLARE conflict_count INT;
+    DECLARE berth_status VARCHAR(20);
+    DECLARE conflict_start DATETIME;
+    DECLARE conflict_end DATETIME;
+    DECLARE conflict_ship VARCHAR(100);
+    
+    -- First, check if the berth exists and is active
+    SELECT status INTO berth_status
+    FROM berths
+    WHERE berth_id = p_berth_id;
+    
+    IF berth_status IS NULL THEN
+        SET p_is_available = FALSE;
+        SET p_conflict_details = 'Berth does not exist';
+    ELSEIF berth_status != 'active' THEN
+        SET p_is_available = FALSE;
+        SET p_conflict_details = CONCAT('Berth is not active (current status: ', berth_status, ')');
+    ELSE
+        -- Check for overlapping berth assignments
+        SELECT COUNT(*), 
+               MIN(ba.arrival_time),
+               MIN(ba.departure_time),
+               (SELECT name FROM ships WHERE ship_id = MIN(ba.ship_id))
+        INTO conflict_count, conflict_start, conflict_end, conflict_ship
+        FROM berth_assignments ba
+        WHERE ba.berth_id = p_berth_id
+          AND ba.status = 'active'
+          AND (
+              -- New booking starts during existing booking
+              (p_start_time BETWEEN ba.arrival_time AND ba.departure_time)
+              -- New booking ends during existing booking
+              OR (p_end_time BETWEEN ba.arrival_time AND ba.departure_time)
+              -- New booking completely contains existing booking
+              OR (p_start_time <= ba.arrival_time AND p_end_time >= ba.departure_time)
+          );
+        
+        IF conflict_count > 0 THEN
+            SET p_is_available = FALSE;
+            SET p_conflict_details = CONCAT(
+                'Berth already booked by ', 
+                conflict_ship, 
+                ' from ', 
+                DATE_FORMAT(conflict_start, '%Y-%m-%d %H:%i'),
+                ' to ',
+                DATE_FORMAT(conflict_end, '%Y-%m-%d %H:%i')
+            );
+        ELSE
+            SET p_is_available = TRUE;
+            SET p_conflict_details = 'Berth is available for the requested time period';
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+
+-- Step 1: Declare variables-- Step 1: Define the OUT parameters
+SET @is_available = NULL;
+SET @conflict_details = NULL;
+
+-- Step 2: Call the procedure with your inputs
+CALL check_berth_availability(
+    17,                                      -- p_berth_id
+    '2025-04-16 16:38:00',                   -- p_start_time
+    '2025-04-18 16:40:00',                   -- p_end_time
+    @is_available,                          -- OUT: availability flag
+    @conflict_details                       -- OUT: details if conflict exists
+);
+
+-- Step 3: Retrieve the OUT values
+SELECT @is_available AS is_available, @conflict_details AS conflict_details;
+
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS create_schedule_with_berths //
+
+CREATE PROCEDURE create_schedule_with_berths(
+    IN p_ship_id INT,
+    IN p_route_id INT,
+    IN p_max_cargo DECIMAL(12, 2),
+    IN p_status VARCHAR(20),
+    IN p_notes TEXT,
+    IN p_departure_date DATETIME,
+    IN p_arrival_date DATETIME,
+    IN p_origin_berth_id INT,
+    IN p_origin_berth_start DATETIME,
+    IN p_origin_berth_end DATETIME,
+    IN p_destination_berth_id INT,
+    IN p_destination_berth_start DATETIME,
+    IN p_destination_berth_end DATETIME,
+    OUT p_schedule_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE origin_available BOOLEAN;
+    DECLARE destination_available BOOLEAN;
+    DECLARE origin_conflict VARCHAR(255);
+    DECLARE destination_conflict VARCHAR(255);
+    
+    -- Check berth availability
+    CALL check_berth_availability(p_origin_berth_id, p_origin_berth_start, p_origin_berth_end, origin_available, origin_conflict);
+    CALL check_berth_availability(p_destination_berth_id, p_destination_berth_start, p_destination_berth_end, destination_available, destination_conflict);
+    
+    -- If both berths are available, create the schedule and berth assignments
+    IF origin_available = TRUE AND destination_available = TRUE THEN
+        START TRANSACTION;
+        
+        -- Insert the schedule
+        INSERT INTO schedules (
+            ship_id, 
+            route_id, 
+            departure_date, 
+            arrival_date, 
+            status, 
+            max_cargo, 
+            notes, 
+            created_at, 
+            updated_at
+        ) VALUES (
+            p_ship_id,
+            p_route_id,
+            p_departure_date,
+            p_arrival_date,
+            p_status,
+            p_max_cargo,
+            p_notes,
+            NOW(),
+            NOW()
+        );
+        
+        -- Get the newly created schedule ID
+        SET p_schedule_id = LAST_INSERT_ID();
+        
+        -- Create berth assignments
+        -- Origin berth assignment
+        INSERT INTO berth_assignments (
+            berth_id,
+            ship_id,
+            schedule_id,
+            arrival_time,
+            departure_time,
+            status,
+            created_at,
+            updated_at
+        ) VALUES (
+            p_origin_berth_id,
+            p_ship_id,
+            p_schedule_id,
+            p_origin_berth_start,
+            p_origin_berth_end,
+            'active',
+            NOW(),
+            NOW()
+        );
+        
+        -- Destination berth assignment
+        INSERT INTO berth_assignments (
+            berth_id,
+            ship_id,
+            schedule_id,
+            arrival_time,
+            departure_time,
+            status,
+            created_at,
+            updated_at
+        ) VALUES (
+            p_destination_berth_id,
+            p_ship_id,
+            p_schedule_id,
+            p_destination_berth_start,
+            p_destination_berth_end,
+            'active',
+            NOW(),
+            NOW()
+        );
+        
+        COMMIT;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Schedule created successfully with berth assignments';
+    ELSE
+        -- Return error message if berths are not available
+        SET p_success = FALSE;
+        IF origin_available = FALSE THEN
+            SET p_message = CONCAT('Origin berth issue: ', origin_conflict);
+        ELSE
+            SET p_message = CONCAT('Destination berth issue: ', destination_conflict);
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_schedule_berth_assignments //
+
+CREATE PROCEDURE get_schedule_berth_assignments(
+    IN p_schedule_id INT
+)
+BEGIN
+    SELECT 
+        ba.assignment_id,
+        ba.berth_id,
+        b.berth_number,
+        p.name AS port_name,
+        ba.ship_id,
+        s.name AS ship_name,
+        ba.arrival_time,
+        ba.departure_time,
+        ba.status AS assignment_status,
+        CASE
+            WHEN ba.status = 'inactive' THEN 'cancelled'
+            WHEN NOW() < ba.arrival_time THEN 'scheduled'
+            WHEN NOW() BETWEEN ba.arrival_time AND ba.departure_time THEN 'current'
+            ELSE 'completed'
+        END AS operational_status
+    FROM 
+        berth_assignments ba
+    JOIN 
+        berths b ON ba.berth_id = b.berth_id
+    JOIN 
+        ports p ON b.port_id = p.port_id
+    JOIN 
+        ships s ON ba.ship_id = s.ship_id
+    WHERE 
+        ba.schedule_id = p_schedule_id
+    ORDER BY 
+        ba.arrival_time;
+END//
+
+DELIMITER ;

@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.db import connection
 from django.http import JsonResponse
+import json
 from datetime import datetime
 
 def create_schedule_form(request):
@@ -98,180 +99,135 @@ def create_schedule(request):
         messages.error(request, "All fields are required")
         return redirect('create-schedule-form')
     
-    # Check if berths are available for the selected times
+    # Use stored procedure to create schedule with berth assignments
     with connection.cursor() as cursor:
-        # Check origin berth availability
-        cursor.execute("""
-            SELECT COUNT(*) FROM schedules 
-            WHERE origin_berth_id = %s AND (
-                (origin_berth_start <= %s AND origin_berth_end >= %s) OR
-                (origin_berth_start <= %s AND origin_berth_end >= %s) OR
-                (origin_berth_start >= %s AND origin_berth_end <= %s)
-            )
-        """, [
-            origin_berth_id, 
-            origin_berth_start, origin_berth_start,  # Starts during existing booking
-            origin_berth_end, origin_berth_end,      # Ends during existing booking
-            origin_berth_start, origin_berth_end     # Completely contains existing booking
-        ])
+        # Set up OUT parameters
+        cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
         
-        origin_conflicts = cursor.fetchone()[0]
-        
-        # Check destination berth availability
-        cursor.execute("""
-            SELECT COUNT(*) FROM schedules 
-            WHERE destination_berth_id = %s AND (
-                (destination_berth_start <= %s AND destination_berth_end >= %s) OR
-                (destination_berth_start <= %s AND destination_berth_end >= %s) OR
-                (destination_berth_start >= %s AND destination_berth_end <= %s)
-            )
-        """, [
-            destination_berth_id, 
-            destination_berth_start, destination_berth_start,  # Starts during existing booking
-            destination_berth_end, destination_berth_end,      # Ends during existing booking
-            destination_berth_start, destination_berth_end     # Completely contains existing booking
-        ])
-        
-        destination_conflicts = cursor.fetchone()[0]
-        
-        if origin_conflicts > 0:
-            messages.error(request, "The selected origin berth is not available for the specified time period")
-            return redirect('create-schedule-form')
-        
-        if destination_conflicts > 0:
-            messages.error(request, "The selected destination berth is not available for the specified time period")
-            return redirect('create-schedule-form')
-        
-        try:
-            # Create the schedule with berth assignments
-            cursor.execute("""
-                INSERT INTO schedules (
-                    ship_id, route_id, max_cargo, status, notes,
-                    departure_date, arrival_date,
-                    origin_berth_id, origin_berth_start, origin_berth_end,
-                    destination_berth_id, destination_berth_start, destination_berth_end
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, [
+        # Call the procedure
+        cursor.callproc(
+            'create_schedule_with_berths', 
+            [
                 ship_id, route_id, max_cargo, status, notes,
                 departure_date, arrival_date,
                 origin_berth_id, origin_berth_start, origin_berth_end,
-                destination_berth_id, destination_berth_start, destination_berth_end
-            ])
-            
-            # Update ship status if it's currently docked
-            cursor.execute("""
-                UPDATE ships SET status = 'in_transit' 
-                WHERE ship_id = %s AND status = 'docked'
-            """, [ship_id])
-            
-            # Update berth status to 'reserved' for future dates
-            current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # For origin berth
-            if origin_berth_start > current_datetime:
-                cursor.execute("""
-                    UPDATE berths SET status = 'reserved'
-                    WHERE berth_id = %s AND status = 'active'
-                """, [origin_berth_id])
-            
-            # For destination berth
-            if destination_berth_start > current_datetime:
-                cursor.execute("""
-                    UPDATE berths SET status = 'reserved'
-                    WHERE berth_id = %s AND status = 'active'
-                """, [destination_berth_id])
-            
-            messages.success(request, "Schedule created successfully")
-            return redirect('manage-schedules')
-            
-        except Exception as e:
-            messages.error(request, f"Error creating schedule: {str(e)}")
-            return redirect('create-schedule-form')
+                destination_berth_id, destination_berth_start, destination_berth_end,
+                0, False, ''  # Output parameters placeholders
+            ]
+        )
         
-    return redirect('manage-schedules')
+        # Get output parameters
+        cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
+        schedule_id, success, message = cursor.fetchone()
+        
+        if success:
+            messages.success(request, message)
+            return redirect('manage-schedules')
+        else:
+            messages.error(request, message)
+            return redirect('create-schedule-form')
+
 
 def get_available_berths(request, port_id):
     """
-    API view to get available berths for a port with time-based filtering
+    API endpoint to get available berths for a port
     """
-    start_time = request.GET.get('start')
-    end_time = request.GET.get('end')
-    ship_type = request.GET.get('ship_type')
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
     
-    if not all([start_time, end_time]):
-        return JsonResponse({'error': 'Start and end times are required'}, status=400)
-    
-    # Query berths compatible with ship type and available during the specified time
-    with connection.cursor() as cursor:
-        # Get all berths for the port that match the ship type
-        if ship_type == 'container':
-            type_filter = "AND (type = 'container' OR type = 'multipurpose')"
-        elif ship_type == 'bulk':
-            type_filter = "AND (type = 'bulk' OR type = 'multipurpose')"
-        elif ship_type == 'tanker':
-            type_filter = "AND type = 'tanker'"
-        else:
-            type_filter = ""
+    try:
+        # Parse JSON data
+        data = json.loads(request.body)
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        ship_type = data.get('ship_type')
         
-        cursor.execute(f"""
-            SELECT berth_id, berth_number, type, length, width, depth, status
-            FROM berths
-            WHERE port_id = %s {type_filter} AND status = 'active'
-        """, [port_id])
-        
-        all_berths = [
-            {
-                'id': row[0],
-                'berth_number': row[1],
-                'type': row[2],
-                'length': row[3],
-                'width': row[4],
-                'depth': row[5],
-                'status': row[6]
-            }
-            for row in cursor.fetchall()
-        ]
-        
-        # Check for time conflicts with existing schedules
-        available_berths = []
-        for berth in all_berths:
-            # Check if this berth is already booked during the requested time
-            cursor.execute("""
-                SELECT COUNT(*) FROM schedules 
-                WHERE (
-                    (origin_berth_id = %s AND (
-                        (origin_berth_start <= %s AND origin_berth_end >= %s) OR
-                        (origin_berth_start <= %s AND origin_berth_end >= %s) OR
-                        (origin_berth_start >= %s AND origin_berth_end <= %s)
-                    )) OR
-                    (destination_berth_id = %s AND (
-                        (destination_berth_start <= %s AND destination_berth_end >= %s) OR
-                        (destination_berth_start <= %s AND destination_berth_end >= %s) OR
-                        (destination_berth_start >= %s AND destination_berth_end <= %s)
-                    ))
-                )
-            """, [
-                berth['id'], 
-                start_time, start_time,  # Starts during existing booking
-                end_time, end_time,      # Ends during existing booking
-                start_time, end_time,    # Completely contains existing booking
-                berth['id'],
-                start_time, start_time,  # Same checks for destination berth
-                end_time, end_time,
-                start_time, end_time
-            ])
+        # Use stored procedure to get available berths
+        with connection.cursor() as cursor:
+            cursor.callproc('get_available_berths', [port_id, start_time, end_time])
             
-            conflicts = cursor.fetchone()[0]
+            # Fetch results
+            results = cursor.fetchall()
             
-            if conflicts == 0:
-                berth['available'] = True
-                available_berths.append(berth)
-            else:
-                berth['available'] = False
-                berth['reason'] = "Already booked during this time"
+            berths = []
+            for row in results:
+                berth = {
+                    'id': row[0],
+                    'berth_number': row[1],
+                    'type': row[2],
+                    'length': row[3],
+                    'width': row[4],
+                    'depth': row[5],
+                    'status': row[6]
+                }
+                
+                # Filter by ship type if needed
+                if ship_type:
+                    # Match berths compatible with ship type
+                    if (ship_type == 'container' and berth['type'] in ['container', 'multipurpose']) or \
+                       (ship_type == 'bulk' and berth['type'] in ['bulk', 'multipurpose']) or \
+                       (ship_type == 'tanker' and berth['type'] == 'tanker') or \
+                       (ship_type == 'roro' and berth['type'] in ['roro', 'multipurpose']):
+                        berths.append(berth)
+                else:
+                    berths.append(berth)
+            
+            return JsonResponse({'berths': berths})
+            
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
     
-    return JsonResponse({
-        'berths': available_berths,
-        'total_available': len(available_berths),
-        'port_id': port_id
-    })
+
+def check_berth_availability_ajax(request):
+    """
+    AJAX endpoint to check berth availability
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        berth_id = data.get('berth_id')
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        
+        if not all([berth_id, start_time, end_time]):
+            return JsonResponse({'error': 'Missing required parameters'}, status=400)
+        
+        # Convert string dates to datetime objects if needed
+        try:
+            start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M')
+            end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M')
+        except (ValueError, TypeError):
+            # Already in datetime format or invalid
+            pass
+        
+        with connection.cursor() as cursor:
+
+            cursor.execute("SET @p_is_available = 0, @p_conflict_details = '';")
+
+    # Step 2: Call the procedure using those session variables
+            cursor.execute(f"""
+                CALL check_berth_availability(
+                {berth_id}, 
+                '{start_time}', 
+                '{end_time}', 
+                @p_is_available, 
+                @p_conflict_details
+                );
+                """)
+
+    # Step 3: Retrieve OUT parameters
+            cursor.execute("SELECT @p_is_available, @p_conflict_details;")
+            is_available, conflict_details = cursor.fetchone()
+
+            print("is_available", is_available)
+            print("conflict_details", conflict_details)
+
+            return JsonResponse({
+                'is_available': bool(is_available),
+                'message': conflict_details
+            })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

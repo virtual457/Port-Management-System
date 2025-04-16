@@ -372,8 +372,6 @@
                 maxCargoInput.placeholder = "Enter max tonnage";
             }
             
-            // Update available berths based on ship dimensions
-            updateAvailableBerths();
         });
         
         // Route select change handler
@@ -565,65 +563,107 @@
         });
     });
     
-    // Function to fetch berths for a selected port
-    function fetchBerthsForPort(portId, portType) {
-        // In a real implementation, this would be an AJAX call to your server
-        // For now, we'll simulate with dummy data
+// Function to fetch berths for a selected port
+function fetchBerthsForPort(portId, portType) {
+    // Get ship type to filter compatible berths
+    const shipSelect = document.getElementById('shipSelect');
+    const selectedShipOption = shipSelect.options[shipSelect.selectedIndex];
+    const shipType = selectedShipOption.getAttribute('data-type');
+    
+    // Get time range for berth booking
+    const startInput = document.getElementById(`${portType}BerthStart`);
+    const endInput = document.getElementById(`${portType}BerthEnd`);
+    
+    // Default times if not set yet
+    let startTime = startInput.value || null;
+    let endTime = endInput.value || null;
+    
+    // Clear existing options
+    const berthSelect = document.getElementById(`${portType}BerthSelect`);
+    berthSelect.innerHTML = '<option value="" selected disabled>Loading berths...</option>';
+    
+    // Prepare CSRF token
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    console.log(`Fetching berths for port ${portId} (${portType})`);
+    
+    // Call the API to get available berths
+    fetch(`/api/ports/${portId}/available-berths/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            start_time: startTime,
+            end_time: endTime,
+            ship_type: shipType
+        })
+    })
+    .then(response => {
+        console.log(`Response status: ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
         
-        // Get ship type to filter compatible berths
-        const shipSelect = document.getElementById('shipSelect');
-        const selectedShipOption = shipSelect.options[shipSelect.selectedIndex];
-        const shipType = selectedShipOption.getAttribute('data-type');
-        
-        // Clear existing options
-        const berthSelect = document.getElementById(`${portType}BerthSelect`);
+        // Reset select options
         berthSelect.innerHTML = '<option value="" selected disabled>Select a berth</option>';
         
-        // Fetch berths from server (simulated)
-        // In real implementation, make an AJAX call like:
-        // fetch(`/api/ports/${portId}/berths?ship_type=${shipType}`)
-        //   .then(response => response.json())
-        //   .then(berths => { ... })
-        
-        // Dummy data for demo
-        const dummyBerths = [
-            { id: 1, berth_number: 'B01', type: 'container', length: 350, width: 45, depth: 15.5, status: 'active' },
-            { id: 2, berth_number: 'B02', type: 'container', length: 400, width: 50, depth: 16, status: 'active' },
-            { id: 3, berth_number: 'B03', type: 'bulk', length: 280, width: 40, depth: 14, status: 'active' },
-            { id: 4, berth_number: 'B04', type: 'tanker', length: 320, width: 45, depth: 18, status: 'maintenance' }
-        ];
-        
-        // Filter berths that match ship type
-        let compatibleBerths = dummyBerths;
-        if (shipType === 'container') {
-            compatibleBerths = dummyBerths.filter(berth => berth.type === 'container' || berth.type === 'multipurpose');
-        } else if (shipType === 'bulk') {
-            compatibleBerths = dummyBerths.filter(berth => berth.type === 'bulk' || berth.type === 'multipurpose');
-        } else if (shipType === 'tanker') {
-            compatibleBerths = dummyBerths.filter(berth => berth.type === 'tanker');
+        // Check if we have the expected data structure
+        if (data && data.berths) {
+            if (data.berths.length > 0) {
+                data.berths.forEach(berth => {
+                    const option = document.createElement('option');
+                    option.value = berth.id;
+                    option.textContent = `${berth.berth_number} (${berth.type})`;
+                    option.setAttribute('data-type', berth.type);
+                    option.setAttribute('data-length', berth.length);
+                    option.setAttribute('data-width', berth.width);
+                    option.setAttribute('data-depth', berth.depth);
+                    option.setAttribute('data-status', berth.status);
+                    
+                    // Disable options that are in maintenance or inactive
+                    if (berth.status !== 'active') {
+                        option.disabled = true;
+                        option.textContent += ` - ${berth.status}`;
+                    }
+                    
+                    berthSelect.appendChild(option);
+                });
+            } else {
+                // No berths available
+                const option = document.createElement('option');
+                option.disabled = true;
+                option.selected = true;
+                option.textContent = 'No compatible berths available';
+                berthSelect.appendChild(option);
+            }
+        } else {
+            throw new Error('Unexpected response format: missing berths property');
         }
         
-        // Add options to select
-        compatibleBerths.forEach(berth => {
-            const option = document.createElement('option');
-            option.value = berth.id;
-            option.textContent = `${berth.berth_number} (${berth.type})`;
-            option.setAttribute('data-type', berth.type);
-            option.setAttribute('data-length', berth.length);
-            option.setAttribute('data-width', berth.width);
-            option.setAttribute('data-depth', berth.depth);
-            option.setAttribute('data-status', berth.status);
-            
-            // Disable options that are in maintenance or inactive
-            if (berth.status !== 'active') {
-                option.disabled = true;
-                option.textContent += ` - ${berth.status}`;
-            }
-            
-            berthSelect.appendChild(option);
-        });
-    }
-    
+        // Enable the select
+        berthSelect.disabled = false;
+    })
+    .catch(error => {
+        console.error('Error fetching berths:', error);
+        berthSelect.innerHTML = '<option value="" selected disabled>Error loading berths</option>';
+        
+        // Add an error message below the select
+        const parentElement = berthSelect.parentElement;
+        let errorDiv = parentElement.querySelector('.berth-error');
+        if (!errorDiv) {
+            errorDiv = document.createElement('div');
+            errorDiv.className = 'berth-error text-danger mt-2';
+            parentElement.appendChild(errorDiv);
+        }
+        errorDiv.textContent = `Error: ${error.message}`;
+    });
+}
     // Function to update berth booking times based on departure/arrival
     function updateBerthBookingTimes() {
         const departureDate = new Date(document.getElementById('departureDate').value);
@@ -675,42 +715,90 @@
     }
     
     // Function to check berth availability
-    function checkBerthAvailability(portType) {
-        const berthSelect = document.getElementById(`${portType}BerthSelect`);
-        const startInput = document.getElementById(`${portType}BerthStart`);
-        const endInput = document.getElementById(`${portType}BerthEnd`);
-        
-        if (!berthSelect.value || !startInput.value || !endInput.value) {
-            return; // Not all values are set yet
+function checkBerthAvailability(portType) {
+    const berthSelect = document.getElementById(`${portType}BerthSelect`);
+    const startInput = document.getElementById(`${portType}BerthStart`);
+    const endInput = document.getElementById(`${portType}BerthEnd`);
+    
+    if (!berthSelect.value || !startInput.value || !endInput.value) {
+        return; // Not all values are set yet
+    }
+    
+    const berthId = berthSelect.value;
+    const startTime = startInput.value;
+    const endTime = endInput.value;
+    
+    // Show loading state
+    const infoDiv = document.getElementById(`${portType}BerthInfo`);
+    const existingAlert = infoDiv.querySelector('.alert');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+    
+    const loadingAlert = document.createElement('div');
+    loadingAlert.className = 'alert alert-info mt-2 mb-0';
+    loadingAlert.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking berth availability...';
+    infoDiv.appendChild(loadingAlert);
+    
+    // Prepare CSRF token
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    console.log('Checking berth availability:', {
+        berth_id: berthId,
+        start_time: startTime,
+        end_time: endTime
+    });
+    
+    // Call the API to check availability
+    fetch('/api/check-berth-availability/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+        },
+        body: JSON.stringify({
+            berth_id: berthId,
+            start_time: startTime,
+            end_time: endTime
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
+        return response.json();
+    })
+    .then(data => {
+        // Remove loading alert
+        loadingAlert.remove();
         
-        const berthId = berthSelect.value;
-        const startTime = new Date(startInput.value).toISOString();
-        const endTime = new Date(endInput.value).toISOString();
+        console.log('Berth availability response:', data);
         
-        // In a real implementation, make an AJAX call to check availability
-        // fetch(`/api/berths/${berthId}/check-availability?start=${startTime}&end=${endTime}`)
-        //   .then(response => response.json())
-        //   .then(data => { ... })
-        
-        // For demo, we'll simulate a response
-        const isAvailable = Math.random() > 0.3; // 70% chance of availability
+        // Check if data has the expected properties
+        const isAvailable = data && data.is_available === true;
+        const message = data && data.message ? data.message : 'No availability information';
         
         // Show feedback to user
-        const infoDiv = document.getElementById(`${portType}BerthInfo`);
-        const existingAlert = infoDiv.querySelector('.alert');
-        if (existingAlert) {
-            existingAlert.remove();
-        }
-        
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert ${isAvailable ? 'alert-success' : 'alert-danger'} mt-2 mb-0`;
         alertDiv.innerHTML = isAvailable ? 
-            '<i class="bi bi-check-circle me-2"></i>Berth is available for the selected time period' : 
-            '<i class="bi bi-exclamation-triangle me-2"></i>Berth is not available for the selected time period';
+            `<i class="bi bi-check-circle me-2"></i>${message}` : 
+            `<i class="bi bi-exclamation-triangle me-2"></i>${message}`;
         
         infoDiv.appendChild(alertDiv);
-    }
+    })
+    .catch(error => {
+        console.error('Error checking berth availability:', error);
+        loadingAlert.remove();
+        
+        // Show error message
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger mt-2 mb-0';
+        alertDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>Error checking berth availability: ${error.message}`;
+        infoDiv.appendChild(alertDiv);
+    });
+}
+
 </script>
 </body>
 </html>
