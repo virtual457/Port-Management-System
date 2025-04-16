@@ -141,7 +141,120 @@ def staff_dashboard(request):
 
 @role_required('customer')
 def customer_dashboard(request):
-    return render(request, 'customer_dashboard.html')
+    user_id = request.session.get('user_id')
+    
+    # Early return if not authenticated
+    if not user_id:
+        return redirect('login')
+    
+    # Check if user has customer role selected
+    selected_role = request.session.get('selected_role')
+    if selected_role != 'customer':
+        return redirect('unauthorized')  # Or handle appropriately
+    
+    # Get username from database
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+        result = cursor.fetchone()
+        username = result[0] if result else "Customer"
+    
+    print(user_id)
+    print(username)
+    # Initialize dashboard data
+    context = {
+        'username': username,
+        'cargo_count': 0,
+        'active_bookings': 0,
+        'in_transit': 0,
+        'completed_shipments': 0,
+        'recent_bookings': [],
+        'upcoming_shipments': [],
+        'popular_routes': []
+    }
+    
+    with connection.cursor() as cursor:
+        # Get cargo statistics
+        cursor.callproc('get_customer_dashboard_stats', [user_id])
+        
+        # Process cargo count
+        result = cursor.fetchone()
+        if result:
+            context['cargo_count'] = result[0]
+        
+        # Process direct active bookings
+        cursor.nextset()
+        result = cursor.fetchone()
+        direct_bookings = result[0] if result else 0
+        
+        # Process connected active bookings
+        cursor.nextset()
+        result = cursor.fetchone()
+        connected_bookings = result[0] if result else 0
+        
+        context['active_bookings'] = direct_bookings + connected_bookings
+        
+        # Process in-transit shipments
+        cursor.nextset()
+        result = cursor.fetchone()
+        if result:
+            context['in_transit'] = result[0]
+        
+        # Process completed shipments
+        cursor.nextset()
+        result = cursor.fetchone()
+        if result:
+            context['completed_shipments'] = result[0]
+        
+        # Get recent bookings (limit to 5)
+        cursor.callproc('get_customer_recent_bookings', [user_id, 5])
+        recent_bookings = []
+        for row in cursor.fetchall():
+            recent_bookings.append({
+                'type': row[0],
+                'booking_id': row[1],
+                'cargo_description': row[2],
+                'cargo_type': row[3],
+                'origin_port': row[4],
+                'destination_port': row[5],
+                'departure_date': row[6],
+                'first_departure': row[7],
+                'booking_status': row[8],
+                'connected_booking_id': row[9]
+            })
+        context['recent_bookings'] = recent_bookings
+        
+        # Get upcoming shipments (limit to 3)
+        cursor.nextset()  # Move to next result set if needed
+        cursor.callproc('get_customer_upcoming_shipments', [user_id, 3])
+        upcoming_shipments = []
+        for row in cursor.fetchall():
+            upcoming_shipments.append({
+                'cargo_description': row[0],
+                'origin_port': row[1],
+                'destination_port': row[2],
+                'departure_date': row[3],
+                'days_until': row[4]
+            })
+        context['upcoming_shipments'] = upcoming_shipments
+        
+        # Get popular shipping routes (limit to 5)
+        cursor.nextset()  # Move to next result set if needed
+        cursor.callproc('get_popular_shipping_routes', [5])
+        popular_routes = []
+        for row in cursor.fetchall():
+            popular_routes.append({
+                'route_id': row[0],
+                'origin_id': row[1],
+                'destination_id': row[2],
+                'origin_port': row[3],
+                'destination_port': row[4],
+                'duration': row[5],
+                'available_ships': row[6],
+                'avg_cost_per_kg': round(float(row[7]), 2)  # Format as 2 decimal places
+            })
+        context['popular_routes'] = popular_routes
+    print(context)
+    return render(request, 'customer_dashboard.html', context)
 
 
 #can be optimized using a limit and offset for pagination in the stored procedure.

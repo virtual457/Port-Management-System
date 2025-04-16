@@ -83,14 +83,18 @@ urlpatterns = [
 
 
     # Shipping search and booking URLs
-path('customer/find-shipping/', shipping_views.find_shipping_options, name='find-shipping-options'),
-path('customer/book-cargo/<int:schedule_id>/', shipping_views.book_direct_cargo, name='book-direct-cargo'),
-path('customer/book-connected-route/<str:route_id>/<int:cargo_id>/<str:booking_type>/', shipping_views.book_connected_route, name='book-connected-route'),
-path('customer/bookings/', shipping_views.view_bookings, name='customer-bookings'),
-path('customer/booking/<int:booking_id>/<str:booking_type>/', shipping_views.view_booking_details, name='booking-details'),
-path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', shipping_views.cancel_booking, name='cancel-booking'),
-path('api/cargo/<int:cargo_id>/', shipping_views.get_cargo_details, name='get-cargo-details'),
-path('test-connected-routes/', shipping_views.test_connected_routes, name='test-connected-routes'),
+    path('customer/find-shipping/', shipping_views.find_shipping_options, name='find-shipping-options'),
+    path('customer/book-cargo/<int:schedule_id>/', shipping_views.book_direct_cargo, name='book-direct-cargo'),
+    path('customer/book-connected-route/<str:route_id>/<int:cargo_id>/<str:booking_type>/', shipping_views.book_connected_route, name='book-connected-route'),
+    path('customer/bookings/', shipping_views.view_bookings, name='customer-bookings'),
+    path('customer/booking/<int:booking_id>/<str:booking_type>/', shipping_views.view_booking_details, name='booking-details'),
+    path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', shipping_views.cancel_booking, name='cancel-booking'),
+    path('api/cargo/<int:cargo_id>/', shipping_views.get_cargo_details, name='get-cargo-details'),
+    path('test-connected-routes/', shipping_views.test_connected_routes, name='test-connected-routes'),
+# View booking details
+    path('customer/booking-details/<int:booking_id>/<str:booking_type>/', 
+         booking_views.view_booking_details, 
+         name='booking-details'),
 
     path('customer/book-cargo/<int:schedule_id>/', booking_views.book_cargo, name='book-cargo'),
     

@@ -1121,3 +1121,187 @@ BEGIN
     END IF;
 END//
 DELIMITER ;
+
+
+-- Stored procedure to get customer dashboard statistics
+DROP PROCEDURE IF EXISTS get_customer_dashboard_stats;
+DELIMITER //
+CREATE PROCEDURE get_customer_dashboard_stats(
+    IN p_user_id INT
+)
+BEGIN
+    -- Get cargo count
+    SELECT COUNT(*) AS cargo_count FROM cargo WHERE user_id = p_user_id;
+    
+    -- Get active bookings count (direct bookings)
+    SELECT COUNT(*) AS direct_active_bookings 
+    FROM cargo_bookings 
+    WHERE user_id = p_user_id AND booking_status IN ('pending', 'confirmed');
+    
+    -- Get active bookings count (connected bookings)
+    SELECT COUNT(*) AS connected_active_bookings 
+    FROM connected_bookings 
+    WHERE user_id = p_user_id AND booking_status IN ('pending', 'confirmed');
+    
+    -- Get shipments in transit
+    SELECT COUNT(*) AS in_transit_count 
+    FROM cargo 
+    WHERE user_id = p_user_id AND status = 'in_transit';
+    
+    -- Get completed shipments
+    SELECT COUNT(*) AS completed_count 
+    FROM cargo 
+    WHERE user_id = p_user_id AND status = 'delivered';
+END//
+DELIMITER ;
+
+-- Stored procedure to get recent bookings for dashboard
+DROP PROCEDURE IF EXISTS get_customer_recent_bookings;
+DELIMITER //
+CREATE PROCEDURE get_customer_recent_bookings(
+    IN p_user_id INT,
+    IN p_limit INT
+)
+BEGIN
+    -- Using UNION to combine direct and connected bookings
+    (SELECT 
+        'direct' as type,
+        b.booking_id,
+        c.description as cargo_description,
+        c.cargo_type,
+        p1.name as origin_port,
+        p2.name as destination_port,
+        s.departure_date,
+        NULL as first_departure,
+        b.booking_status,
+        b.booking_id as connected_booking_id
+    FROM cargo_bookings b
+    JOIN cargo c ON b.cargo_id = c.cargo_id
+    JOIN schedules s ON b.schedule_id = s.schedule_id
+    JOIN routes r ON s.route_id = r.route_id
+    JOIN ports p1 ON r.origin_port_id = p1.port_id
+    JOIN ports p2 ON r.destination_port_id = p2.port_id
+    WHERE b.user_id = p_user_id)
+    
+    UNION ALL
+    
+    (SELECT 
+        'connected' as type,
+        cb.connected_booking_id as booking_id,
+        c.description as cargo_description,
+        c.cargo_type,
+        p1.name as origin_port,
+        p2.name as destination_port,
+        NULL as departure_date,
+        (SELECT MIN(s.departure_date) 
+         FROM connected_booking_segments cbs
+         JOIN schedules s ON cbs.schedule_id = s.schedule_id
+         WHERE cbs.connected_booking_id = cb.connected_booking_id) as first_departure,
+        cb.booking_status,
+        cb.connected_booking_id
+    FROM connected_bookings cb
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    JOIN ports p1 ON cb.origin_port_id = p1.port_id
+    JOIN ports p2 ON cb.destination_port_id = p2.port_id
+    WHERE cb.user_id = p_user_id)
+    
+    ORDER BY booking_status = 'confirmed' DESC, 
+             booking_status = 'pending' DESC,
+             booking_status = 'completed' DESC,
+             COALESCE(departure_date, first_departure) DESC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+-- Stored procedure to get upcoming shipments for dashboard
+DROP PROCEDURE IF EXISTS get_customer_upcoming_shipments;
+DELIMITER //
+
+
+
+CREATE PROCEDURE get_customer_upcoming_shipments(
+    IN p_user_id INT,
+    IN p_limit INT
+)
+BEGIN
+    (SELECT 
+        c.description as cargo_description,
+        p1.name as origin_port,
+        p2.name as destination_port,
+        s.departure_date,
+        DATEDIFF(s.departure_date, NOW()) as days_until
+    FROM cargo_bookings b
+    JOIN cargo c ON b.cargo_id = c.cargo_id
+    JOIN schedules s ON b.schedule_id = s.schedule_id
+    JOIN routes r ON s.route_id = r.route_id
+    JOIN ports p1 ON r.origin_port_id = p1.port_id
+    JOIN ports p2 ON r.destination_port_id = p2.port_id
+    WHERE b.user_id = p_user_id AND b.booking_status = 'confirmed' 
+    AND s.departure_date > CURRENT_DATE())
+    
+    UNION ALL
+    
+    (SELECT 
+        c.description as cargo_description,
+        p1.name as origin_port,
+        p2.name as destination_port,
+        (SELECT MIN(s.departure_date) 
+         FROM connected_booking_segments cbs
+         JOIN schedules s ON cbs.schedule_id = s.schedule_id
+         WHERE cbs.connected_booking_id = cb.connected_booking_id
+         AND s.departure_date > NOW()) as departure_date,
+        DATEDIFF((SELECT MIN(s.departure_date) 
+                  FROM connected_booking_segments cbs
+                  JOIN schedules s ON cbs.schedule_id = s.schedule_id
+                  WHERE cbs.connected_booking_id = cb.connected_booking_id
+                  AND s.departure_date > NOW()), NOW()) as days_until
+    FROM connected_bookings cb
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    JOIN ports p1 ON cb.origin_port_id = p1.port_id
+    JOIN ports p2 ON cb.destination_port_id = p2.port_id
+    WHERE cb.user_id = p_user_id AND cb.booking_status = 'confirmed'
+    HAVING departure_date IS NOT NULL)
+    
+    ORDER BY days_until ASC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+-- Stored procedure to get popular shipping routes
+DROP PROCEDURE IF EXISTS get_popular_shipping_routes;
+DELIMITER //
+CREATE PROCEDURE get_popular_shipping_routes(
+    IN p_limit INT
+)
+BEGIN
+    SELECT 
+        r.route_id,
+        op.port_id as origin_id,
+        dp.port_id as destination_id,
+        op.name as origin_port,
+        dp.name as destination_port,
+        r.duration,
+        COUNT(DISTINCT s.ship_id) as available_ships,
+        AVG(r.cost_per_kg) as avg_cost_per_kg
+    FROM 
+        routes r
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    LEFT JOIN 
+        schedules s ON r.route_id = s.route_id AND 
+                       s.departure_date > NOW() AND
+                       s.status = 'scheduled'
+    WHERE 
+        r.status = 'active'
+    GROUP BY 
+        r.route_id, op.name, dp.name, r.duration
+    ORDER BY 
+        COUNT(DISTINCT s.schedule_id) DESC, 
+        AVG(r.cost_per_kg) ASC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+call get_customer_upcoming_shipments(1, 3);
