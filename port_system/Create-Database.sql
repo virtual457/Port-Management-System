@@ -1304,8 +1304,50 @@ BEGIN
 END//
 DELIMITER ;
 
-call get_customer_upcoming_shipments(1, 3);
+DELIMITER //
 
-select * from schedules;
+DROP PROCEDURE IF EXISTS delete_port //
 
-select * from routes;
+CREATE PROCEDURE delete_port(
+    IN p_port_id INT,
+    OUT p_status BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE berth_count INT DEFAULT 0;
+    DECLARE route_count INT DEFAULT 0;
+    DECLARE port_name VARCHAR(100);
+    
+    -- Get port name for message
+    SELECT name INTO port_name FROM ports WHERE port_id = p_port_id;
+    
+    IF port_name IS NULL THEN
+        SET p_status = FALSE;
+        SET p_message = 'Port not found.';
+    ELSE
+        -- Check if port has berths
+        SELECT COUNT(*) INTO berth_count FROM berths WHERE port_id = p_port_id;
+        
+        -- Check if port is used in routes (as origin or destination)
+        SELECT COUNT(*) INTO route_count 
+        FROM routes 
+        WHERE origin_port_id = p_port_id OR destination_port_id = p_port_id;
+        
+        -- Only delete if no dependencies exist
+        IF berth_count > 0 THEN
+            SET p_status = FALSE;
+            SET p_message = CONCAT('Cannot delete port "', port_name, '". It has ', berth_count, ' berth(s) associated with it. Please delete them first.');
+        ELSEIF route_count > 0 THEN
+            SET p_status = FALSE;
+            SET p_message = CONCAT('Cannot delete port "', port_name, '". It is used in ', route_count, ' route(s). Please delete them first.');
+        ELSE
+            -- Safe to delete
+            DELETE FROM ports WHERE port_id = p_port_id;
+            SET p_status = TRUE;
+            SET p_message = CONCAT('Port "', port_name, '" deleted successfully!');
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+

@@ -77,3 +77,15 @@ CALL find_all_routes(1, 5, '2024-03-01', '2024-05-15', 1, 2);
 -- Test Case 20: Route with mixed optimization (cost and time)
 SELECT 'Test Case 20: Route with mixed optimization' as test_case;
 CALL find_all_routes(1, 5, '2024-03-01', '2024-05-15', 1, 2); 
+
+
+SET @status = 0;
+SET @message = '';
+
+
+select * from ports where name = 'deletable port';
+-- Call the procedure with a port ID (replace 5 with an actual port ID from your database)
+CALL delete_port(61, @status, @message);
+
+-- Display the results
+SELECT @status AS deletion_status, @message AS result_message;

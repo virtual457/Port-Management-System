@@ -597,26 +597,19 @@ def admin_ports_delete(request):
             messages.error(request, "No port specified.")
             return redirect('manage-ports')
         
-        # Get port name for success message
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT name FROM ports WHERE port_id = %s", [port_id])
-            result = cursor.fetchone()
-            port_name = result[0] if result else "Unknown port"
-        
-        # Delete port from database
+        # Use the stored procedure to safely delete the port
         try:
             with connection.cursor() as cursor:
-                # You might want to check if port is in use before deletion
-                cursor.execute("SELECT COUNT(*) FROM schedules WHERE port_id = %s", [port_id])
-                count = cursor.fetchone()[0]
+                cursor.callproc('delete_port', [port_id, 0, ''])
+                # Get the OUT parameters (status and message)
+                cursor.execute('SELECT @_delete_port_1, @_delete_port_2')
+                status, message = cursor.fetchone()
                 
-                if count > 0:
-                    messages.error(request, f"Cannot delete '{port_name}'. It is used in {count} schedule(s).")
-                    return redirect('manage-ports')
-                
-                cursor.execute("DELETE FROM ports WHERE port_id = %s", [port_id])
-                
-            messages.success(request, f"Port '{port_name}' deleted successfully!")
+                if status:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
+                    
         except Exception as e:
             messages.error(request, f"Error deleting port: {str(e)}")
         
