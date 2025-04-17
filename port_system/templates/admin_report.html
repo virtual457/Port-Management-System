@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Port System Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #212529;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #343a40;
+        }
+        .sidebar a.active {
+            background-color: #0d6efd;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .dashboard-card {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+            height: 100%;
+            border-left: 4px solid #0d6efd;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .message-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1060;
+            width: 350px;
+        }
+        .table-header {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        .activity-item {
+            border-left: 3px solid #0d6efd;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .activity-item:before {
+            content: "";
+            position: absolute;
+            left: -9px;
+            top: 0;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #0d6efd;
+        }
+        .activity-time {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+<!-- Messages -->
+{% if messages %}
+<div class="message-container">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Admin Menu</h5>
+    <hr class="bg-light">
+    <a href="/admin/dashboard" class="active"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/admin/users"><i class="bi bi-people me-2"></i> Users</a>
+    <a href="/admin/ports"><i class="bi bi-geo-alt me-2"></i> Ports</a>
+    <a href="/admin/ships"><i class="bi bi-water me-2"></i> Ships</a>
+    <a href="/admin/routes"><i class="bi bi-map me-2"></i> Routes</a>
+    <a href="/admin/bookings"><i class="bi bi-calendar-check me-2"></i> Bookings</a>
+    <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+    <a href="/admin/settings"><i class="bi bi-gear me-2"></i> Settings</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-speedometer2 me-2"></i> System Dashboard
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <div class="dropdown me-3">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="timeRangeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-calendar-range me-1"></i> 
+                    {% if selected_range == '7' %}Last 7 Days
+                    {% elif selected_range == '30' %}Last 30 Days
+                    {% elif selected_range == '90' %}Last 90 Days
+                    {% elif selected_range == '365' %}Last Year
+                    {% elif selected_range == 'all' %}All Time
+                    {% else %}Last 30 Days{% endif %}
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="timeRangeDropdown">
+                    <li><a class="dropdown-item" href="?range=7">Last 7 Days</a></li>
+                    <li><a class="dropdown-item" href="?range=30">Last 30 Days</a></li>
+                    <li><a class="dropdown-item" href="?range=90">Last 90 Days</a></li>
+                    <li><a class="dropdown-item" href="?range=365">Last Year</a></li>
+                    <li><a class="dropdown-item" href="?range=all">All Time</a></li>
+                </ul>
+            </div>
+            <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    {% if error %}
+    <div class="alert alert-danger">
+        Error loading dashboard data. Please try again or contact technical support.
+    </div>
+    {% else %}
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card border-primary">
+            <div class="text-primary card-icon"><i class="bi bi-people"></i></div>
+            <div class="stat-value text-primary">{{ total_users|default:0 }}</div>
+            <div class="stat-label">Total Users</div>
+            <div class="mt-2 small">
+                {% for role in role_stats %}
+                    <span class="badge bg-light text-dark me-1">{{ role.role_name }}: {{ role.user_count }}</span>
+                {% empty %}
+                    <span class="badge bg-light text-dark me-1">No role data available</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card border-success">
+            <div class="text-success card-icon"><i class="bi bi-box"></i></div>
+            <div class="stat-value text-success">{{ total_cargo|default:0 }}</div>
+            <div class="stat-label">Total Cargo</div>
+            <div class="mt-2 small">
+                {% for status in cargo_stats %}
+                    <span class="badge bg-light text-dark me-1">{{ status.status|title }}: {{ status.cargo_count }}</span>
+                {% empty %}
+                    <span class="badge bg-light text-dark me-1">No cargo data available</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card border-warning">
+            <div class="text-warning card-icon"><i class="bi bi-geo"></i></div>
+            <div class="stat-value text-warning">{{ total_ports|default:0 }}</div>
+            <div class="stat-label">Total Ports</div>
+            <div class="mt-2 small">
+                {% for status in port_stats %}
+                    <span class="badge bg-light text-dark me-1">{{ status.status|title }}: {{ status.port_count }}</span>
+                {% empty %}
+                    <span class="badge bg-light text-dark me-1">No port data available</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card border-info">
+            <div class="text-info card-icon"><i class="bi bi-currency-dollar"></i></div>
+            <div class="stat-value text-info">${{ total_calculated_revenue|floatformat:2 }}</div>
+            <div class="stat-label">Total Revenue</div>
+            <div class="mt-2 small">
+                <span class="badge bg-light text-dark me-1">Direct: ${{ aggregated_revenue.direct|floatformat:2 }}</span>
+                <span class="badge bg-light text-dark me-1">Connected: ${{ aggregated_revenue.connected|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Booking Trends and Stats -->
+    <div class="row mb-4">
+        <!-- Booking Trends Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="dashboard-card">
+                <h5 class="mb-3"><i class="bi bi-graph-up me-2"></i>Booking Trends</h5>
+                <ul class="nav nav-tabs mb-3" id="bookingTrendsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily" type="button" role="tab" aria-controls="daily" aria-selected="true">Daily</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly" type="button" role="tab" aria-controls="weekly" aria-selected="false">Weekly</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="monthly-tab" data-bs-toggle="tab" data-bs-target="#monthly" type="button" role="tab" aria-controls="monthly" aria-selected="false">Monthly</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="bookingTrendsContent">
+                    <div class="tab-pane fade show active" id="daily" role="tabpanel" aria-labelledby="daily-tab">
+                        <div class="chart-container">
+                            <canvas id="dailyBookingsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="weekly" role="tabpanel" aria-labelledby="weekly-tab">
+                        <div class="chart-container">
+                            <canvas id="weeklyBookingsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="monthly" role="tabpanel" aria-labelledby="monthly-tab">
+                        <div class="chart-container">
+                            <canvas id="monthlyBookingsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Stats -->
+        <div class="col-lg-4 mb-4">
+            <div class="dashboard-card h-100">
+                <h5 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Booking Statistics</h5>
+                
+                <div>
+                    <h6 class="text-muted">Cargo Conversion Rate</h6>
+                    <div class="text-center my-4">
+                        <div class="display-4 fw-bold text-primary">{{ conversion_rate|floatformat:1 }}%</div>
+                        <div class="text-muted">Cargo to Bookings</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Routes and Cargo Types -->
+    <div class="row mb-4">
+        <!-- Top Routes -->
+        <div class="col-lg-6 mb-4">
+            <div class="dashboard-card">
+                <h5 class="mb-3"><i class="bi bi-map me-2"></i>Top Routes by Revenue</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-header">
+                            <tr>
+                                <th>Route</th>
+                                <th>Origin</th>
+                                <th>Destination</th>
+                                <th>Bookings</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for route in top_routes %}
+                            <tr>
+                                <td>{{ route.route_name }}</td>
+                                <td>{{ route.origin_port }}</td>
+                                <td>{{ route.destination_port }}</td>
+                                <td>{{ route.total_bookings }}</td>
+                                <td>${{ route.total_revenue|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No route data available.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cargo Types -->
+        <div class="col-lg-6 mb-4">
+            <div class="dashboard-card">
+                <h5 class="mb-3"><i class="bi bi-box-seam me-2"></i>Cargo Distribution</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">By Type</h6>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="cargoTypeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">By Status</h6>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="cargoStatusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="dashboard-card mb-4">
+        <h5 class="mb-3"><i class="bi bi-activity me-2"></i>Recent System Activity</h5>
+        <ul class="nav nav-tabs mb-3" id="activityTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="bookings-tab" data-bs-toggle="tab" data-bs-target="#bookings" type="button" role="tab" aria-controls="bookings" aria-selected="true">Bookings</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="schedules-tab" data-bs-toggle="tab" data-bs-target="#schedules" type="button" role="tab" aria-controls="schedules" aria-selected="false">Schedules</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab" aria-controls="users" aria-selected="false">Users</button>
+            </li>
+        </ul>
+        <div class="tab-content" id="activityTabsContent">
+            <!-- Bookings Tab -->
+            <div class="tab-pane fade show active" id="bookings" role="tabpanel" aria-labelledby="bookings-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Direct Bookings</h6>
+                        {% for booking in recent_direct_bookings %}
+                            <div class="activity-item">
+                                <div class="fw-bold">{{ booking.username }} booked {{ booking.cargo_description }}</div>
+                                <div>${{ booking.amount|floatformat:2 }} - <span class="badge 
+                                    {% if booking.status == 'confirmed' %}bg-success
+                                    {% elif booking.status == 'pending' %}bg-warning
+                                    {% elif booking.status == 'completed' %}bg-info
+                                    {% elif booking.status == 'cancelled' %}bg-danger
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ booking.status|title }}
+                                </span></div>
+                                <div class="activity-time">{{ booking.formatted_time }}</div>
+                            </div>
+                        {% empty %}
+                            <p class="text-muted">No recent direct bookings.</p>
+                        {% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Connected Bookings</h6>
+                        {% for booking in recent_connected_bookings %}
+                            <div class="activity-item">
+                                <div class="fw-bold">{{ booking.username }} booked {{ booking.cargo_description }}</div>
+                                <div>${{ booking.amount|floatformat:2 }} - <span class="badge 
+                                    {% if booking.status == 'confirmed' %}bg-success
+                                    {% elif booking.status == 'pending' %}bg-warning
+                                    {% elif booking.status == 'completed' %}bg-info
+                                    {% elif booking.status == 'cancelled' %}bg-danger
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ booking.status|title }}
+                                </span></div>
+                                <div class="activity-time">{{ booking.formatted_time }}</div>
+                            </div>
+                        {% empty %}
+                            <p class="text-muted">No recent connected bookings.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <!-- Schedules Tab -->
+            <div class="tab-pane fade" id="schedules" role="tabpanel" aria-labelledby="schedules-tab">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-header">
+                            <tr>
+                                <th>Ship</th>
+                                <th>Route</th>
+                                <th>Departure</th>
+                                <th>Arrival</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in recent_schedules %}
+                            <tr>
+                                <td>{{ schedule.ship_name }}</td>
+                                <td>{{ schedule.route_name }}</td>
+                                <td>{{ schedule.formatted_departure }}</td>
+                                <td>{{ schedule.formatted_arrival }}</td>
+                                <td>{{ schedule.formatted_time }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No recent schedules found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Users Tab -->
+            <div class="tab-pane fade" id="users" role="tabpanel" aria-labelledby="users-tab">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-header">
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Registered</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in recent_users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ user.formatted_time }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">No recent user registrations.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    
+    toggle.addEventListener('click', function() {
+        document.body.classList.toggle('sidebar-open');
+    });
+    
+    document.addEventListener('click', function(event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+    
+    // Auto-hide messages after 5 seconds
+    setTimeout(function() {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 5000);
+    
+    // Chart.js configuration
+    const chartColors = ['#0d6efd', '#20c997', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#6610f2'];
+    
+    // Daily Bookings Chart
+    const dailyBookingData = {{ daily_booking_data|safe }};
+    if (dailyBookingData && dailyBookingData.dates && dailyBookingData.dates.length > 0) {
+        const ctxDaily = document.getElementById('dailyBookingsChart').getContext('2d');
+        new Chart(ctxDaily, {
+            type: 'line',
+            data: {
+                labels: dailyBookingData.dates,
+                datasets: [
+                    {
+                        label: 'Direct Bookings',
+                        data: dailyBookingData.direct,
+                        borderColor: chartColors[0],
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Connected Bookings',
+                        data: dailyBookingData.connected,
+                        borderColor: chartColors[1],
+                        backgroundColor: 'rgba(32, 201, 151, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Bookings'
+                        }
+                    }
+                }
+            }
+        });
+    } else if (document.getElementById('dailyBookingsChart')) {
+        document.getElementById('dailyBookingsChart').parentNode.innerHTML = 
+            '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
+    }
+    
+    // Weekly Bookings Chart
+    const weeklyBookingData = {{ weekly_booking_data|safe }};
+    if (weeklyBookingData && weeklyBookingData.weeks && weeklyBookingData.weeks.length > 0) {
+        const ctxWeekly = document.getElementById('weeklyBookingsChart').getContext('2d');
+        new Chart(ctxWeekly, {
+            type: 'bar',
+            data: {
+                labels: weeklyBookingData.weeks,
+                datasets: [
+                    {
+                        label: 'Direct Bookings',
+                        data: weeklyBookingData.direct_count,
+                        backgroundColor: chartColors[0],
+                        order: 1
+                    },
+                    {
+                        label: 'Connected Bookings',
+                        data: weeklyBookingData.connected_count,
+                        backgroundColor: chartColors[1],
+                        order: 1
+                    },
+                    {
+                        label: 'Combined Revenue',
+                        data: weeklyBookingData.weeks.map((_, i) => 
+                            (weeklyBookingData.direct_revenue[i] || 0) + (weeklyBookingData.connected_revenue[i] || 0)
+                        ),
+                        type: 'line',
+                        borderColor: chartColors[2],
+                        borderWidth: 2,
+                        pointBackgroundColor: chartColors[2],
+                        fill: false,
+                        yAxisID: 'y1',
+                        order: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Bookings'
+                        },
+                        stacked: true
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue ($)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    },
+                    x: {
+                        stacked: true
+                    }
+                }
+            }
+        });
+    } else if (document.getElementById('weeklyBookingsChart')) {
+        document.getElementById('weeklyBookingsChart').parentNode.innerHTML = 
+            '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
+    }
+    
+    // Monthly Bookings Chart
+    const monthlyBookingData = {{ monthly_booking_data|safe }};
+    if (monthlyBookingData && monthlyBookingData.months && monthlyBookingData.months.length > 0) {
+        const ctxMonthly = document.getElementById('monthlyBookingsChart').getContext('2d');
+        new Chart(ctxMonthly, {
+            type: 'bar',
+            data: {
+                labels: monthlyBookingData.months,
+                datasets: [
+                    {
+                        label: 'Direct Bookings',
+                        data: monthlyBookingData.direct_count,
+                        backgroundColor: chartColors[0],
+                        order: 1
+                    },
+                    {
+                        label: 'Connected Bookings',
+                        data: monthlyBookingData.connected_count,
+                        backgroundColor: chartColors[1],
+                        order: 1
+                    },
+                    {
+                        label: 'Combined Revenue',
+                        data: monthlyBookingData.months.map((_, i) => 
+                            (monthlyBookingData.direct_revenue[i] || 0) + (monthlyBookingData.connected_revenue[i] || 0)
+                        ),
+                        type: 'line',
+                        borderColor: chartColors[2],
+                        borderWidth: 2,
+                        pointBackgroundColor: chartColors[2],
+                        fill: false,
+                        yAxisID: 'y1',
+                        order: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Bookings'
+                        },
+                        stacked: true
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue ($)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    },
+                    x: {
+                        stacked: true
+                    }
+                }
+            }
+        });
+    } else if (document.getElementById('monthlyBookingsChart')) {
+        document.getElementById('monthlyBookingsChart').parentNode.innerHTML = 
+            '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
+    }
+    
+    // Cargo Type Chart
+    const cargoTypes = {
+        labels: [{% for cargo in cargo_types %}'{{ cargo.cargo_type }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+        data: [{% for cargo in cargo_types %}{{ cargo.cargo_count }}{% if not forloop.last %}, {% endif %}{% endfor %}]
+    };
+    
+    if (cargoTypes.labels && cargoTypes.labels.length > 0) {
+        const ctxCargoType = document.getElementById('cargoTypeChart').getContext('2d');
+        new Chart(ctxCargoType, {
+            type: 'doughnut',
+            data: {
+                labels: cargoTypes.labels,
+                datasets: [{
+                    data: cargoTypes.data,
+                    backgroundColor: chartColors.slice(0, cargoTypes.labels.length),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 10
+                        }
+                    }
+                }
+            }
+        });
+    } else if (document.getElementById('cargoTypeChart')) {
+        document.getElementById('cargoTypeChart').parentNode.innerHTML = 
+            '<div class="text-center py-5 text-muted">No cargo type data available</div>';
+    }
+    
+    // Cargo Status Chart
+    const cargoStatus = {
+        labels: [{% for status in cargo_status %}'{{ status.status }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+        data: [{% for status in cargo_status %}{{ status.cargo_count }}{% if not forloop.last %}, {% endif %}{% endfor %}]
+    };
+    
+    if (cargoStatus.labels && cargoStatus.labels.length > 0) {
+        const ctxCargoStatus = document.getElementById('cargoStatusChart').getContext('2d');
+        new Chart(ctxCargoStatus, {
+            type: 'pie',
+            data: {
+                labels: cargoStatus.labels,
+                datasets: [{
+                    data: cargoStatus.data,
+                    backgroundColor: cargoStatus.labels.map(label => {
+                        switch(label) {
+                            case 'pending': return '#0dcaf0';
+                            case 'booked': return '#20c997';
+                            case 'in_transit': return '#0d6efd';
+                            case 'delivered': return '#ffc107';
+                            case 'cancelled': return '#dc3545';
+                            default: return '#6c757d';
+                        }
+                    }),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 10
+                        }
+                    }
+                }
+            }
+        });
+    } else if (document.getElementById('cargoStatusChart')) {
+        document.getElementById('cargoStatusChart').parentNode.innerHTML = 
+            '<div class="text-center py-5 text-muted">No cargo status data available</div>';
+    }
+});
+</script>
+</body>
+</html>

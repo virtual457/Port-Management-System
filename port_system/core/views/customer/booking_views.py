@@ -23,11 +23,9 @@ def book_cargo(request, schedule_id):
         messages.error(request, "No cargo selected for booking")
         return redirect('find-shipping-options')
     
-    # If form is submitted to confirm booking
     if request.method == 'POST':
         try:
             with connection.cursor() as cursor:
-                # Get price information
                 cursor.execute("""
                     SELECT 
                         r.cost_per_kg,

@@ -6,7 +6,7 @@ from .views.shipowner.schedule_views import *;
 from .views.shipowner.schedule_management_view import *;
 from .views.admin import berth_views;
 from .views.customer import *;
-
+from .views.shipowner import *;
 urlpatterns = [
     path('', views.login_view, name='login'),
     path('login/', views.login_view, name='login'),
@@ -82,6 +82,7 @@ urlpatterns = [
     path('shipowner/schedules/update-status/', update_schedule_status, name='update-schedule-status'),
     path('shipowner/schedules/delete/', delete_schedule, name='delete-schedule'),
     path('api/ports/<int:port_id>/available-berths/', get_available_berths, name='get-available-berths'),
+    path('shipowner/reports/', shipowner_reports, name='shipowner-reports'),
 
 
     # Shipping search and booking URLs
@@ -94,6 +95,10 @@ urlpatterns = [
     path('api/cargo/<int:cargo_id>/', shipping_views.get_cargo_details, name='get-cargo-details'),
     path('test-connected-routes/', shipping_views.test_connected_routes, name='test-connected-routes'),
     path('customer/support/', shipping_views.customer_support, name='customer-support'),
+    
+    path('customer/reports/', customer_reports, name='customer-reports'),
+    path('admin/reports/', admin_reports, name='admin-reports'),
+
 # View booking details
     path('customer/booking-details/<int:booking_id>/<str:booking_type>/', 
          booking_views.view_booking_details, 

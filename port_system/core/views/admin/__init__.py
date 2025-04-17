@@ -3,3 +3,4 @@
 from .berth_views import manage_berths, add_berth, edit_berth, delete_berth
 
 from .port_details_view import port_details
+from .admin_reports import *

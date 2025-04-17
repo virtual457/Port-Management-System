@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shipowner Revenue Reports</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            height: 100vh;
+            background-color: #343a40;
+            color: #fff;
+            position: fixed;
+            width: 250px;
+            left: -250px;
+            transition: left 0.3s;
+            z-index: 1050;
+            padding-top: 20px;
+        }
+        .sidebar a {
+            color: #fff;
+            display: block;
+            padding: 10px 20px;
+            text-decoration: none;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+        }
+        .sidebar-toggle {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+        .main-content {
+            margin-left: 0;
+            padding: 80px 20px 20px 20px;
+            transition: margin-left 0.3s;
+            min-height: calc(100vh - 80px);
+        }
+        .sidebar-open .sidebar {
+            left: 0;
+        }
+        .sidebar-open .main-content {
+            margin-left: 250px;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1040;
+            border-bottom: 1px solid #ddd;
+            transition: margin-left 0.3s;
+        }
+        .sidebar-open .navbar {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .reports-card {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 1200px;
+            margin: auto;
+        }
+        .stat-card {
+            border-radius: 10px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .message-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1060;
+            width: 350px;
+        }
+        .table-header {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 20px;
+        }
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<!-- Messages -->
+{% if messages %}
+<div class="message-container">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <h5 class="text-center">Shipowner Menu</h5>
+    <hr class="bg-light">
+    <a href="/shipowner/dashboard"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
+    <a href="/shipowner/ships"><i class="bi bi-water me-2"></i> Manage Ships</a>
+    <a href="/shipowner/routes"><i class="bi bi-map me-2"></i> Manage Routes</a>
+    <a href="/shipowner/schedules"><i class="bi bi-calendar-check me-2"></i> Schedules</a>
+    <a href="/shipowner/reports" class="active"><i class="bi bi-graph-up me-2"></i> Reports</a>
+    <a href="/shipowner/berths"><i class="bi bi-geo-alt me-2"></i> Berth Bookings</a>
+    <a href="/shipowner/support"><i class="bi bi-question-circle me-2"></i> Support</a>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
+    <div class="container-fluid px-4 d-flex align-items-center">
+        <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
+        <a class="navbar-brand mb-0" href="#">
+            <i class="bi bi-graph-up me-2"></i> Revenue Reports
+        </a>
+        <div class="d-flex ms-auto align-items-center">
+            <span class="me-3">Hello, <strong>{{ username|default:"Shipowner" }}</strong></span>
+            <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main-content" id="main-content">
+    <div class="reports-card">
+        <!-- Report Header -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">Shipping Revenue Analytics</h3>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="timeRangeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-calendar-range me-1"></i> Last 30 Days
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="timeRangeDropdown">
+                        <li><a class="dropdown-item" href="?range=7">Last 7 Days</a></li>
+                        <li><a class="dropdown-item" href="?range=30">Last 30 Days</a></li>
+                        <li><a class="dropdown-item" href="?range=90">Last 90 Days</a></li>
+                        <li><a class="dropdown-item" href="?range=365">Last Year</a></li>
+                        <li><a class="dropdown-item" href="?range=all">All Time</a></li>
+                    </ul>
+                </div>
+            </div>
+            <hr>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card border-primary">
+                    <div class="text-primary card-icon"><i class="bi bi-water"></i></div>
+                    <div class="stat-value text-primary">{{ stats.ship_count }}</div>
+                    <div class="stat-label">Total Ships</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card border-success">
+                    <div class="text-success card-icon"><i class="bi bi-map"></i></div>
+                    <div class="stat-value text-success">{{ stats.active_routes }}</div>
+                    <div class="stat-label">Active Routes</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card border-info">
+                    <div class="text-info card-icon"><i class="bi bi-calendar2-week"></i></div>
+                    <div class="stat-value text-info">{{ stats.scheduled_voyages }}</div>
+                    <div class="stat-label">Scheduled</div>
+                    <div class="small text-muted">In Transit: {{ stats.in_transit_voyages }}</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card border-success">
+                    <div class="text-success card-icon"><i class="bi bi-currency-dollar"></i></div>
+                    <div class="stat-value text-success">${{ stats.total_revenue|floatformat:2 }}</div>
+                    <div class="stat-label">Total Revenue</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Ship Utilization</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="shipUtilizationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Revenue by Route</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="revenueByRouteChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Second Row of Charts -->
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Monthly Revenue</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="monthlyRevenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+<!-- Upcoming Voyages Table -->
+<div class="card mb-4">
+    <div class="card-header bg-warning">
+        <h5 class="mb-0 text-dark">Upcoming Voyages</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-header">
+                    <tr>
+                        <th>Ship</th>
+                        <th>Route</th>
+                        <th>Departure</th>
+                        <th>Arrival</th>
+                        <th>Bookings</th>
+                        <th>Utilization</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for voyage in upcoming_voyages %}
+                    <tr>
+                        <td>{{ voyage.ship_name }}</td>
+                        <td>{{ voyage.route_name }}</td>
+                        <td>{{ voyage.formatted_departure }}</td>
+                        <td>{{ voyage.formatted_arrival }}</td>
+                        <td>{{ voyage.booking_count }}</td>
+                        <td>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ voyage.utilization_percent }}%;" 
+                                     aria-valuenow="{{ voyage.utilization_percent }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <small>{{ voyage.utilization_percent }}%</small>
+                        </td>
+                        <td>
+                            <span class="badge 
+                                {% if voyage.status == 'scheduled' %}bg-primary
+                                {% elif voyage.status == 'in_progress' %}bg-info
+                                {% elif voyage.status == 'completed' %}bg-success
+                                {% elif voyage.status == 'cancelled' %}bg-danger
+                                {% else %}bg-secondary{% endif %} 
+                                status-badge">
+                                {{ voyage.status|title }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center">No upcoming voyages found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+        
+<!-- Recent Bookings Table -->
+<div class="card">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Recent Bookings</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-header">
+                    <tr>
+                        <th>ID</th>
+                        <th>Ship</th>
+                        <th>Route</th>
+                        <th>Customer</th>
+                        <th>Cargo</th>
+                        <th>Status</th>
+                        <th>Revenue</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in recent_bookings %}
+                    <tr>
+                        <td>{{ booking.booking_id }}</td>
+                        <td>{{ booking.ship_name }}</td>
+                        <td>{{ booking.route_name }}</td>
+                        <td>{{ booking.customer_name }}</td>
+                        <td>{{ booking.cargo_description }}</td>
+                        <td>
+                            <span class="badge 
+                                {% if booking.booking_status == 'confirmed' %}bg-success
+                                {% elif booking.booking_status == 'pending' %}bg-warning
+                                {% elif booking.booking_status == 'completed' %}bg-info
+                                {% elif booking.booking_status == 'cancelled' %}bg-danger
+                                {% else %}bg-secondary{% endif %} 
+                                status-badge">
+                                {{ booking.booking_status|title }}
+                            </span>
+                        </td>
+                        <td>${{ booking.revenue|floatformat:2 }}</td>
+                        <td>{{ booking.formatted_date }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">No recent bookings found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sidebar toggle functionality
+    const toggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    
+    toggle.addEventListener('click', function() {
+        document.body.classList.toggle('sidebar-open');
+    });
+    
+    document.addEventListener('click', function(event) {
+        const isClickInsideSidebar = sidebar.contains(event.target);
+        const isClickOnToggle = toggle.contains(event.target);
+        
+        if (!isClickInsideSidebar && !isClickOnToggle) {
+            document.body.classList.remove('sidebar-open');
+        }
+    });
+    
+    // Auto-hide messages after 5 seconds
+    setTimeout(function() {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(function(alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 5000);
+    
+    // Chart.js configuration
+    const chartColors = ['#0d6efd', '#20c997', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#6610f2'];
+    
+    // Ship Utilization Chart
+    const shipUtilizationData = {{ ship_utilization_data|safe }};
+    const ctxShipUtilization = document.getElementById('shipUtilizationChart').getContext('2d');
+    new Chart(ctxShipUtilization, {
+        type: 'bar',
+        data: {
+            labels: shipUtilizationData.labels,
+            datasets: [{
+                label: 'Utilization %',
+                data: shipUtilizationData.data,
+                backgroundColor: chartColors[0],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Utilization %'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Revenue by Route Chart
+    const revenueByRouteData = {{ revenue_by_route_data|safe }};
+    const ctxRevenueByRoute = document.getElementById('revenueByRouteChart').getContext('2d');
+    new Chart(ctxRevenueByRoute, {
+        type: 'pie',
+        data: {
+            labels: revenueByRouteData.labels,
+            datasets: [{
+                data: revenueByRouteData.data,
+                backgroundColor: chartColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+    
+    // Monthly Revenue Chart
+    const monthlyRevenueData = {{ monthly_revenue_data|safe }};
+    const ctxMonthlyRevenue = document.getElementById('monthlyRevenueChart').getContext('2d');
+    new Chart(ctxMonthlyRevenue, {
+        type: 'bar',
+        data: {
+            labels: monthlyRevenueData.labels,
+            datasets: [
+                {
+                    label: 'Bookings',
+                    data: monthlyRevenueData.bookings,
+                    backgroundColor: '#0d6efd',
+                    order: 2
+                },
+                {
+                    label: 'Revenue ($)',
+                    data: monthlyRevenueData.revenue,
+                    type: 'line',
+                    borderColor: '#20c997',
+                    borderWidth: 3,
+                    fill: false,
+                    pointBackgroundColor: '#20c997',
+                    pointRadius: 4,
+                    yAxisID: 'y1',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Bookings'
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Revenue ($)'
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+</body>
+</html>

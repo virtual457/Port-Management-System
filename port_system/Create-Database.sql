@@ -1694,3 +1694,1191 @@ BEGIN
 END//
 
 DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_cargo_by_type(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        cargo_type, 
+        COUNT(*) as count
+    FROM 
+        cargo
+    WHERE 
+        user_id = p_user_id
+    GROUP BY 
+        cargo_type
+    ORDER BY 
+        count DESC;
+END//
+DELIMITER ;
+
+-- Suggestion for a new stored procedure
+DELIMITER //
+CREATE PROCEDURE get_booking_status_counts(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        'direct' as type,
+        booking_status,
+        COUNT(*) as count
+    FROM 
+        cargo_bookings
+    WHERE 
+        user_id = p_user_id
+    GROUP BY 
+        booking_status
+    
+    UNION ALL
+    
+    SELECT 
+        'connected' as type,
+        booking_status,
+        COUNT(*) as count
+    FROM 
+        connected_bookings
+    WHERE 
+        user_id = p_user_id
+    GROUP BY 
+        booking_status;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_monthly_shipping_activity(
+    IN p_user_id INT,
+    IN p_days_back INT
+)
+BEGIN
+    -- Calculate start date
+    SET @start_date = DATE_SUB(CURDATE(), INTERVAL p_days_back DAY);
+    
+    SELECT 
+        DATE_FORMAT(booking_date, '%Y-%m') as month,
+        COUNT(*) as booking_count,
+        SUM(c.weight) as total_weight
+    FROM 
+        (
+            SELECT 
+                cb.booking_date,
+                cb.cargo_id
+            FROM 
+                cargo_bookings cb
+            WHERE 
+                cb.user_id = p_user_id AND
+                cb.booking_date >= @start_date
+                
+            UNION ALL
+            
+            SELECT 
+                cnb.booking_date,
+                cnb.cargo_id
+            FROM 
+                connected_bookings cnb
+            WHERE 
+                cnb.user_id = p_user_id AND
+                cnb.booking_date >= @start_date
+        ) as bookings
+    JOIN 
+        cargo c ON bookings.cargo_id = c.cargo_id
+    GROUP BY 
+        DATE_FORMAT(booking_date, '%Y-%m')
+    ORDER BY 
+        month;
+END//
+DELIMITER ;
+
+
+-- Drop existing procedures if they exist
+DROP PROCEDURE IF EXISTS get_shipowner_dashboard_stats;
+DROP PROCEDURE IF EXISTS get_shipowner_recent_bookings;
+DROP PROCEDURE IF EXISTS get_shipowner_upcoming_voyages;
+DROP PROCEDURE IF EXISTS get_ship_utilization;
+DROP PROCEDURE IF EXISTS get_revenue_by_route;
+DROP PROCEDURE IF EXISTS get_monthly_shipping_revenue;
+
+-- Stored procedure to get shipowner dashboard statistics
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_shipowner_dashboard_stats//
+CREATE PROCEDURE get_shipowner_dashboard_stats(
+    IN p_user_id INT
+)
+BEGIN
+    -- Get total ships count
+    SELECT COUNT(*) AS ship_count 
+    FROM ships 
+    WHERE owner_id = p_user_id AND status != 'deleted';
+    
+    -- Get active routes count
+    SELECT COUNT(*) AS active_routes 
+    FROM routes 
+    WHERE owner_id = p_user_id AND status = 'active';
+    
+    -- Get scheduled voyages count
+    SELECT COUNT(*) AS scheduled_voyages 
+    FROM schedules s
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    WHERE sh.owner_id = p_user_id AND s.status = 'scheduled';
+    
+    -- Get in-transit voyages count
+    SELECT COUNT(*) AS in_transit_voyages 
+    FROM schedules s
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    WHERE sh.owner_id = p_user_id AND s.status = 'in_progress';
+    
+    -- Get total revenue (from direct AND connected bookings)
+    SELECT (
+        -- Revenue from direct bookings
+        (SELECT COALESCE(SUM(cb.price), 0)
+        FROM cargo_bookings cb
+        JOIN schedules s ON cb.schedule_id = s.schedule_id
+        JOIN ships sh ON s.ship_id = sh.ship_id
+        WHERE sh.owner_id = p_user_id 
+          AND cb.booking_status != 'cancelled'
+          AND cb.payment_status = 'paid')
+        +
+        -- Revenue from connected bookings
+        (SELECT COALESCE(SUM(cbs.segment_price), 0)
+        FROM connected_booking_segments cbs
+        JOIN schedules s ON cbs.schedule_id = s.schedule_id
+        JOIN ships sh ON s.ship_id = sh.ship_id
+        JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+        WHERE sh.owner_id = p_user_id
+          AND cb.booking_status != 'cancelled'
+          AND cb.payment_status = 'paid')
+    ) AS total_revenue;
+END//
+DELIMITER ;
+
+-- Stored procedure to get recent bookings for shipowner
+DELIMITER //
+CREATE PROCEDURE get_shipowner_recent_bookings(
+    IN p_user_id INT,
+    IN p_limit INT
+)
+BEGIN
+    -- Combine direct and connected bookings in a UNION query
+    (SELECT 
+        'direct' AS booking_type,
+        cb.booking_id AS id,
+        s.schedule_id,
+        sh.name AS ship_name,
+        r.name AS route_name,
+        u.username AS customer_name,
+        c.description AS cargo_description,
+        cb.booking_status,
+        cb.price AS revenue,
+        cb.booking_date
+    FROM cargo_bookings cb
+    JOIN schedules s ON cb.schedule_id = s.schedule_id
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    JOIN routes r ON s.route_id = r.route_id
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    WHERE sh.owner_id = p_user_id)
+    
+    UNION ALL
+    
+    (SELECT 
+        'connected' AS booking_type,
+        cb.connected_booking_id AS id,
+        cbs.schedule_id,
+        sh.name AS ship_name,
+        r.name AS route_name,
+        u.username AS customer_name,
+        c.description AS cargo_description,
+        cb.booking_status,
+        cbs.segment_price AS revenue,
+        cb.booking_date
+    FROM connected_booking_segments cbs
+    JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+    JOIN schedules s ON cbs.schedule_id = s.schedule_id
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    JOIN routes r ON s.route_id = r.route_id
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    WHERE sh.owner_id = p_user_id)
+    
+    ORDER BY booking_date DESC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_shipowner_upcoming_voyages//
+CREATE PROCEDURE get_shipowner_upcoming_voyages(
+    IN p_user_id INT,
+    IN p_limit INT
+)
+BEGIN
+    SELECT 
+        s.schedule_id,
+        sh.name AS ship_name, 
+        r.name AS route_name,
+        s.departure_date,
+        s.arrival_date,
+        s.status,
+        -- Count bookings for this schedule (both direct and connected)
+        (
+            (SELECT COUNT(*) FROM cargo_bookings 
+             WHERE schedule_id = s.schedule_id AND booking_status != 'cancelled')
+            +
+            (SELECT COUNT(*) FROM connected_booking_segments cbs
+             JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+             WHERE cbs.schedule_id = s.schedule_id AND cb.booking_status != 'cancelled')
+        ) AS booking_count,
+        -- Calculate utilization percentage
+        ROUND(
+            COALESCE(
+                (
+                    -- Get weight from direct bookings
+                    (SELECT COALESCE(SUM(c.weight), 0) 
+                     FROM cargo_bookings cb
+                     JOIN cargo c ON cb.cargo_id = c.cargo_id 
+                     WHERE cb.schedule_id = s.schedule_id AND cb.booking_status != 'cancelled')
+                    +
+                    -- Get weight from connected bookings
+                    (SELECT COALESCE(SUM(c.weight), 0) 
+                     FROM connected_booking_segments cbs
+                     JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+                     JOIN cargo c ON cb.cargo_id = c.cargo_id 
+                     WHERE cbs.schedule_id = s.schedule_id AND cb.booking_status != 'cancelled')
+                ) / NULLIF(s.max_cargo, 0) * 100,
+            0)
+        ) AS utilization_percent
+    FROM schedules s
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    JOIN routes r ON s.route_id = r.route_id
+    WHERE sh.owner_id = p_user_id
+      AND s.status IN ('scheduled', 'in_progress')  
+      AND s.departure_date >= CURRENT_DATE()
+    ORDER BY s.departure_date ASC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+-- Stored procedure to get ship utilization data
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_ship_utilization//
+CREATE PROCEDURE get_ship_utilization(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        sh.name,
+        COALESCE(
+            ROUND(
+                (
+                    /* Calculate total weight from direct bookings */
+                    (SELECT COALESCE(SUM(c.weight), 0) 
+                     FROM cargo_bookings cb
+                     JOIN cargo c ON cb.cargo_id = c.cargo_id 
+                     JOIN schedules s ON cb.schedule_id = s.schedule_id
+                     WHERE s.ship_id = sh.ship_id 
+                       AND cb.booking_status != 'cancelled'
+                       AND s.status IN ('scheduled', 'in_progress'))
+                    +
+                    /* Add weight from connected bookings */
+                    (SELECT COALESCE(SUM(c.weight), 0)
+                     FROM connected_booking_segments cbs
+                     JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+                     JOIN cargo c ON cb.cargo_id = c.cargo_id
+                     JOIN schedules s ON cbs.schedule_id = s.schedule_id
+                     WHERE s.ship_id = sh.ship_id
+                       AND cb.booking_status != 'cancelled'
+                       AND s.status IN ('scheduled', 'in_progress'))
+                ) / 
+                /* Divide by total capacity */
+                (SELECT COALESCE(SUM(s.max_cargo), 1) 
+                 FROM schedules s 
+                 WHERE s.ship_id = sh.ship_id 
+                   AND s.status IN ('scheduled', 'in_progress')) * 100,
+            0)
+        ) AS utilization_percent
+    FROM ships sh
+    WHERE sh.owner_id = p_user_id
+      AND sh.status != 'deleted'
+      AND EXISTS (
+          SELECT 1 FROM schedules s 
+          WHERE s.ship_id = sh.ship_id 
+            AND s.status IN ('scheduled', 'in_progress')
+      )
+    ORDER BY utilization_percent DESC;
+END//
+DELIMITER ;
+
+-- Stored procedure to get revenue by route
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_revenue_by_route//
+CREATE PROCEDURE get_revenue_by_route(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        r.name,
+        (
+            /* Revenue from direct bookings */
+            (SELECT COALESCE(SUM(cb.price), 0)
+             FROM schedules s
+             JOIN cargo_bookings cb ON s.schedule_id = cb.schedule_id
+             WHERE s.route_id = r.route_id
+               AND cb.booking_status != 'cancelled')
+            +
+            /* Revenue from connected booking segments */
+            (SELECT COALESCE(SUM(cbs.segment_price), 0)
+             FROM schedules s
+             JOIN connected_booking_segments cbs ON s.schedule_id = cbs.schedule_id
+             JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+             WHERE s.route_id = r.route_id
+               AND cb.booking_status != 'cancelled')
+        ) AS total_revenue
+    FROM routes r
+    WHERE r.owner_id = p_user_id
+      AND r.status = 'active'
+    HAVING total_revenue > 0
+    ORDER BY total_revenue DESC;
+END//
+DELIMITER ;
+
+-- Stored procedure to get monthly shipping revenue
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_monthly_shipping_revenue//
+CREATE PROCEDURE get_monthly_shipping_revenue(
+    IN p_user_id INT,
+    IN p_days_back INT
+)
+BEGIN
+    -- Calculate start date
+    SET @start_date = DATE_SUB(CURDATE(), INTERVAL p_days_back DAY);
+    
+    -- Create temporary table to hold combined revenue data
+    CREATE TEMPORARY TABLE IF NOT EXISTS temp_monthly_revenue (
+        month VARCHAR(7),
+        booking_count INT,
+        total_revenue DOUBLE  -- Change from DECIMAL to DOUBLE for JSON compatibility
+    );
+    
+    -- Insert direct booking revenue
+    INSERT INTO temp_monthly_revenue
+    SELECT 
+        DATE_FORMAT(cb.booking_date, '%Y-%m') as month,
+        COUNT(*) as booking_count,
+        SUM(cb.price) as total_revenue
+    FROM cargo_bookings cb
+    JOIN schedules s ON cb.schedule_id = s.schedule_id
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    WHERE sh.owner_id = p_user_id
+      AND cb.booking_date >= @start_date
+      AND cb.booking_status != 'cancelled'
+    GROUP BY month;
+    
+    -- Insert connected booking segment revenue
+    INSERT INTO temp_monthly_revenue
+    SELECT 
+        DATE_FORMAT(cb.booking_date, '%Y-%m') as month,
+        COUNT(DISTINCT cb.connected_booking_id) as booking_count,
+        SUM(cbs.segment_price) as total_revenue
+    FROM connected_booking_segments cbs
+    JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+    JOIN schedules s ON cbs.schedule_id = s.schedule_id
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    WHERE sh.owner_id = p_user_id
+      AND cb.booking_date >= @start_date
+      AND cb.booking_status != 'cancelled'
+    GROUP BY month;
+    
+    -- Return aggregated results
+    SELECT 
+        month,
+        SUM(booking_count) as booking_count,
+        SUM(total_revenue) as total_revenue
+    FROM temp_monthly_revenue
+    GROUP BY month
+    ORDER BY month;
+    
+    -- Clean up
+    DROP TEMPORARY TABLE IF EXISTS temp_monthly_revenue;
+END//
+DELIMITER ;
+
+select * from connected_bookings;
+
+select * from connected_booking_segments;
+
+select * from connected_bookings;
+
+select * from cargo_bookings;
+
+
+---- admin related
+
+call get_admin_dashboard_stats();
+
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_dashboard_stats//
+CREATE PROCEDURE get_admin_dashboard_stats()
+BEGIN
+    -- Get total users count by role
+    SELECT 
+        r.role_name,
+        COUNT(ur.user_id) as user_count
+    FROM roles r
+    LEFT JOIN user_roles ur ON r.role_id = ur.role_id
+    GROUP BY r.role_name
+    ORDER BY user_count DESC;
+    
+    -- Get total cargo count by status
+    SELECT 
+        status,
+        COUNT(*) as cargo_count
+    FROM cargo
+    GROUP BY status;
+    
+    -- Get total ships by type and status
+    SELECT 
+        ship_type,
+        status,
+        COUNT(*) as ship_count
+    FROM ships
+    WHERE status != 'deleted'
+    GROUP BY ship_type, status;
+    
+    -- Get booking statistics (both direct and connected)
+    SELECT 
+        'direct' as booking_type,
+        booking_status,
+        COUNT(*) as booking_count,
+        SUM(price) as total_revenue
+    FROM cargo_bookings
+    GROUP BY booking_status
+    
+    UNION ALL
+    
+    SELECT 
+        'connected' as booking_type,
+        booking_status,
+        COUNT(*) as booking_count,
+        SUM(total_price) as total_revenue
+    FROM connected_bookings
+    GROUP BY booking_status;
+    
+    -- Get ports by status
+    SELECT 
+        status,
+        COUNT(*) as port_count
+    FROM ports
+    GROUP BY status;
+    
+    -- Get total system revenue
+    SELECT 
+        (SELECT COALESCE(SUM(price), 0) FROM cargo_bookings WHERE booking_status != 'cancelled' AND payment_status = 'paid')
+        +
+        (SELECT COALESCE(SUM(total_price), 0) FROM connected_bookings WHERE booking_status != 'cancelled' AND payment_status = 'paid')
+        AS total_system_revenue;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_admin_booking_trends(
+    IN p_days_back INT
+)
+BEGIN
+    -- Calculate start date
+    SET @start_date = DATE_SUB(CURDATE(), INTERVAL p_days_back DAY);
+    
+    -- Get daily booking data (direct and connected)
+    SELECT 
+        DATE(booking_date) as booking_day,
+        COUNT(*) as booking_count,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_day
+    
+    UNION ALL
+    
+    SELECT 
+        DATE(booking_date) as booking_day,
+        COUNT(*) as booking_count,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_day
+    
+    ORDER BY booking_day;
+    
+    -- Get weekly booking data
+    SELECT 
+        YEARWEEK(booking_date) as booking_week,
+        COUNT(*) as booking_count,
+        SUM(price) as revenue,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_week
+    
+    UNION ALL
+    
+    SELECT 
+        YEARWEEK(booking_date) as booking_week,
+        COUNT(*) as booking_count,
+        SUM(total_price) as revenue,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_week
+    
+    ORDER BY booking_week;
+    
+    -- Get monthly booking data
+    SELECT 
+        DATE_FORMAT(booking_date, '%Y-%m') as booking_month,
+        COUNT(*) as booking_count,
+        SUM(price) as revenue,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_month
+    
+    UNION ALL
+    
+    SELECT 
+        DATE_FORMAT(booking_date, '%Y-%m') as booking_month,
+        COUNT(*) as booking_count,
+        SUM(total_price) as revenue,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_month
+    
+    ORDER BY booking_month;
+END//
+DELIMITER ;
+
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_top_routes//
+CREATE PROCEDURE get_admin_top_routes(
+    IN p_limit INT
+)
+BEGIN
+    -- Create temporary tables to store direct and connected booking data
+    DROP TEMPORARY TABLE IF EXISTS temp_direct_route_revenue;
+    CREATE TEMPORARY TABLE temp_direct_route_revenue (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100),
+        booking_count INT,
+        revenue DOUBLE
+    );
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_connected_route_revenue;
+    CREATE TEMPORARY TABLE temp_connected_route_revenue (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100),
+        booking_count INT,
+        revenue DOUBLE
+    );
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_all_routes;
+    CREATE TEMPORARY TABLE temp_all_routes (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100)
+    );
+    
+    -- Get top routes by direct booking revenue
+    INSERT INTO temp_direct_route_revenue
+    SELECT 
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        COUNT(cb.booking_id) AS booking_count,
+        SUM(cb.price) AS revenue
+    FROM routes r
+    JOIN ports op ON r.origin_port_id = op.port_id
+    JOIN ports dp ON r.destination_port_id = dp.port_id
+    JOIN schedules s ON r.route_id = s.route_id
+    JOIN cargo_bookings cb ON s.schedule_id = cb.schedule_id
+    WHERE cb.booking_status != 'cancelled'
+    GROUP BY r.route_id, r.name, op.name, dp.name;
+    
+    -- Get top routes by connected booking revenue
+    INSERT INTO temp_connected_route_revenue
+    SELECT 
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        COUNT(DISTINCT cbs.connected_booking_id) AS booking_count,
+        SUM(cbs.segment_price) AS revenue
+    FROM routes r
+    JOIN ports op ON r.origin_port_id = op.port_id
+    JOIN ports dp ON r.destination_port_id = dp.port_id
+    JOIN schedules s ON r.route_id = s.route_id
+    JOIN connected_booking_segments cbs ON s.schedule_id = cbs.schedule_id
+    JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+    WHERE cb.booking_status != 'cancelled'
+    GROUP BY r.route_id, r.name, op.name, dp.name;
+    
+    -- Get all routes that have either direct or connected bookings
+    INSERT INTO temp_all_routes
+    SELECT DISTINCT route_id, route_name, origin_port, destination_port 
+    FROM temp_direct_route_revenue
+    
+    UNION
+    
+    SELECT DISTINCT route_id, route_name, origin_port, destination_port 
+    FROM temp_connected_route_revenue;
+    
+    -- Select the top routes with combined revenue
+    SELECT 
+        r.route_id,
+        r.route_name,
+        r.origin_port,
+        r.destination_port,
+        COALESCE(d.booking_count, 0) + COALESCE(c.booking_count, 0) AS total_bookings,
+        COALESCE(d.revenue, 0) + COALESCE(c.revenue, 0) AS total_revenue
+    FROM temp_all_routes r
+    LEFT JOIN temp_direct_route_revenue d ON r.route_id = d.route_id
+    LEFT JOIN temp_connected_route_revenue c ON r.route_id = c.route_id
+    ORDER BY total_revenue DESC
+    LIMIT p_limit;
+    
+    -- Clean up temporary tables
+    DROP TEMPORARY TABLE IF EXISTS temp_direct_route_revenue;
+    DROP TEMPORARY TABLE IF EXISTS temp_connected_route_revenue;
+    DROP TEMPORARY TABLE IF EXISTS temp_all_routes;
+END//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE get_admin_cargo_stats()
+BEGIN
+    -- Get cargo by type
+    SELECT 
+        cargo_type,
+        COUNT(*) as cargo_count,
+        AVG(weight) as avg_weight
+    FROM cargo
+    GROUP BY cargo_type
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo by status
+    SELECT 
+        status,
+        COUNT(*) as cargo_count
+    FROM cargo
+    GROUP BY status
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo booking conversion rates
+    SELECT 
+        'overall' as metric,
+        COUNT(DISTINCT c.cargo_id) as total_cargo,
+        (SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
+        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings) as booked_cargo,
+        ((SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
+        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings)) / COUNT(DISTINCT c.cargo_id) * 100 as conversion_rate
+    FROM cargo c;
+END//
+DELIMITER ;
+
+DELIMITER //
+
+drop PROCEDURE if exists get_admin_cargo_stats;
+CREATE PROCEDURE get_admin_cargo_stats()
+BEGIN
+    -- Get cargo by type
+    SELECT 
+        cargo_type,
+        COUNT(*) as cargo_count,
+        AVG(weight) as avg_weight
+    FROM cargo
+    GROUP BY cargo_type
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo by status
+    SELECT 
+        status,
+        COUNT(*) as cargo_count
+    FROM cargo
+    GROUP BY status
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo booking conversion rates
+    SELECT 
+        'overall' as metric,
+        COUNT(DISTINCT c.cargo_id) as total_cargo,
+        (SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
+        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings) as booked_cargo,
+        ((SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
+        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings)) / COUNT(DISTINCT c.cargo_id) * 100 as conversion_rate
+    FROM cargo c;
+END//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE get_admin_recent_activities(
+    IN p_limit INT
+)
+BEGIN
+    -- Get recent user registrations
+    SELECT 
+        'user_registration' as activity_type,
+        user_id,
+        username,
+        email,
+        created_at as activity_time
+    FROM users
+    ORDER BY created_at DESC
+    LIMIT p_limit;
+    
+    -- Get recent direct bookings
+    SELECT 
+        'direct_booking' as activity_type,
+        cb.booking_id as id,
+        u.username,
+        c.description as cargo_description,
+        cb.price as amount,
+        cb.booking_status as status,
+        cb.booking_date as activity_time
+    FROM cargo_bookings cb
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    ORDER BY cb.booking_date DESC
+    LIMIT p_limit;
+    
+    -- Get recent connected bookings
+    SELECT 
+        'connected_booking' as activity_type,
+        cb.connected_booking_id as id,
+        u.username,
+        c.description as cargo_description,
+        cb.total_price as amount,
+        cb.booking_status as status,
+        cb.booking_date as activity_time
+    FROM connected_bookings cb
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    ORDER BY cb.booking_date DESC
+    LIMIT p_limit;
+    
+    -- Get recent schedule creations
+    SELECT 
+        'schedule_creation' as activity_type,
+        s.schedule_id as id,
+        sh.name as ship_name,
+        r.name as route_name,
+        s.departure_date,
+        s.arrival_date,
+        s.created_at as activity_time
+    FROM schedules s
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    JOIN routes r ON s.route_id = r.route_id
+    ORDER BY s.created_at DESC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+select * from roles;
+select * from user_roles where role_id = 4;
+
+select sum(price) from cargo_bookings where payment_status = 'paid';
+
+CALL get_admin_booking_trends(7);
+
+
+-- Fixed get_admin_dashboard_stats procedure with better calculation
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_dashboard_stats//
+CREATE PROCEDURE get_admin_dashboard_stats()
+BEGIN
+    -- Get total users count by role
+    SELECT 
+        r.role_name,
+        COUNT(DISTINCT ur.user_id) as user_count
+    FROM roles r
+    LEFT JOIN user_roles ur ON r.role_id = ur.role_id
+    GROUP BY r.role_name
+    ORDER BY user_count DESC;
+    
+    -- Get total cargo count by status
+    SELECT 
+        status,
+        COUNT(*) as cargo_count
+    FROM cargo
+    GROUP BY status
+    ORDER BY cargo_count DESC;
+    
+    -- Get total ships by type and status
+    SELECT 
+        ship_type,
+        status,
+        COUNT(*) as ship_count
+    FROM ships
+    WHERE status != 'deleted'
+    GROUP BY ship_type, status
+    ORDER BY ship_type, status;
+    
+    -- Get booking statistics (both direct and connected)
+    SELECT 
+        'direct' as booking_type,
+        booking_status,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(price), 0) as total_revenue
+    FROM cargo_bookings
+    GROUP BY booking_status
+    
+    UNION ALL
+    
+    SELECT 
+        'connected' as booking_type,
+        booking_status,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(total_price), 0) as total_revenue
+    FROM connected_bookings
+    GROUP BY booking_status
+    ORDER BY booking_type, booking_status;
+    
+    -- Get ports by status
+    SELECT 
+        status,
+        COUNT(*) as port_count
+    FROM ports
+    GROUP BY status
+    ORDER BY port_count DESC;
+    
+    -- Get total system revenue - make this match the sum in the booking stats
+    SELECT 
+        (
+            SELECT COALESCE(SUM(price), 0) 
+            FROM cargo_bookings 
+            WHERE booking_status != 'cancelled' AND payment_status = 'paid'
+        )
+        +
+        (
+            SELECT COALESCE(SUM(total_price), 0) 
+            FROM connected_bookings 
+            WHERE booking_status != 'cancelled' AND payment_status = 'paid'
+        ) AS total_system_revenue;
+END//
+DELIMITER ;
+
+-- Fixed get_admin_cargo_stats procedure 
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_cargo_stats//
+CREATE PROCEDURE get_admin_cargo_stats()
+BEGIN
+    -- Get cargo by type
+    SELECT 
+        cargo_type,
+        COUNT(*) as cargo_count,
+        COALESCE(AVG(weight), 0) as avg_weight
+    FROM cargo
+    GROUP BY cargo_type
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo by status
+    SELECT 
+        status,
+        COUNT(*) as cargo_count
+    FROM cargo
+    GROUP BY status
+    ORDER BY cargo_count DESC;
+    
+    -- Get cargo booking conversion rates
+    SELECT 
+        'overall' as metric,
+        COUNT(DISTINCT c.cargo_id) as total_cargo,
+        (
+            SELECT COUNT(DISTINCT cargo_id) FROM 
+            (
+                SELECT cargo_id FROM cargo_bookings
+                UNION
+                SELECT cargo_id FROM connected_bookings
+            ) as booked
+        ) as booked_cargo,
+        (
+            (
+                SELECT COUNT(DISTINCT cargo_id) FROM 
+                (
+                    SELECT cargo_id FROM cargo_bookings
+                    UNION
+                    SELECT cargo_id FROM connected_bookings
+                ) as booked
+            ) / COUNT(DISTINCT c.cargo_id) * 100
+        ) as conversion_rate
+    FROM cargo c;
+END//
+DELIMITER ;
+
+-- Fixed get_admin_booking_trends procedure
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_booking_trends//
+CREATE PROCEDURE get_admin_booking_trends(
+    IN p_days_back INT
+)
+BEGIN
+    -- Calculate start date
+    SET @start_date = DATE_SUB(CURDATE(), INTERVAL p_days_back DAY);
+    
+    -- Get daily booking data (direct and connected)
+    SELECT 
+        DATE(booking_date) as booking_day,
+        COUNT(*) as booking_count,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_day
+    
+    UNION ALL
+    
+    SELECT 
+        DATE(booking_date) as booking_day,
+        COUNT(*) as booking_count,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_day
+    
+    ORDER BY booking_day;
+    
+    -- Get weekly booking data
+    SELECT 
+        YEARWEEK(booking_date) as booking_week,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(price), 0) as revenue,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_week
+    
+    UNION ALL
+    
+    SELECT 
+        YEARWEEK(booking_date) as booking_week,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(total_price), 0) as revenue,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_week
+    
+    ORDER BY booking_week;
+    
+    -- Get monthly booking data
+    SELECT 
+        DATE_FORMAT(booking_date, '%Y-%m') as booking_month,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(price), 0) as revenue,
+        'direct' as booking_type
+    FROM cargo_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_month
+    
+    UNION ALL
+    
+    SELECT 
+        DATE_FORMAT(booking_date, '%Y-%m') as booking_month,
+        COUNT(*) as booking_count,
+        COALESCE(SUM(total_price), 0) as revenue,
+        'connected' as booking_type
+    FROM connected_bookings
+    WHERE booking_date >= @start_date
+    GROUP BY booking_month
+    
+    ORDER BY booking_month;
+END//
+DELIMITER ;
+
+-- Fixed get_admin_top_routes procedure
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_top_routes//
+CREATE PROCEDURE get_admin_top_routes(
+    IN p_limit INT
+)
+BEGIN
+    -- Create temporary tables to store direct and connected booking data
+    DROP TEMPORARY TABLE IF EXISTS temp_direct_route_revenue;
+    CREATE TEMPORARY TABLE temp_direct_route_revenue (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100),
+        booking_count INT,
+        revenue DECIMAL(12,2)
+    );
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_connected_route_revenue;
+    CREATE TEMPORARY TABLE temp_connected_route_revenue (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100),
+        booking_count INT,
+        revenue DECIMAL(12,2)
+    );
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_all_routes;
+    CREATE TEMPORARY TABLE temp_all_routes (
+        route_id INT,
+        route_name VARCHAR(100),
+        origin_port VARCHAR(100),
+        destination_port VARCHAR(100)
+    );
+    
+    -- Get top routes by direct booking revenue - with COALESCE to handle NULL values
+    INSERT INTO temp_direct_route_revenue
+    SELECT 
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        COUNT(cb.booking_id) AS booking_count,
+        COALESCE(SUM(cb.price), 0) AS revenue
+    FROM routes r
+    JOIN ports op ON r.origin_port_id = op.port_id
+    JOIN ports dp ON r.destination_port_id = dp.port_id
+    JOIN schedules s ON r.route_id = s.route_id
+    JOIN cargo_bookings cb ON s.schedule_id = cb.schedule_id
+    WHERE cb.booking_status != 'cancelled'
+    GROUP BY r.route_id, r.name, op.name, dp.name;
+    
+    -- Get top routes by connected booking revenue - with COALESCE to handle NULL values
+    INSERT INTO temp_connected_route_revenue
+    SELECT 
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        COUNT(DISTINCT cbs.connected_booking_id) AS booking_count,
+        COALESCE(SUM(cbs.segment_price), 0) AS revenue
+    FROM routes r
+    JOIN ports op ON r.origin_port_id = op.port_id
+    JOIN ports dp ON r.destination_port_id = dp.port_id
+    JOIN schedules s ON r.route_id = s.route_id
+    JOIN connected_booking_segments cbs ON s.schedule_id = cbs.schedule_id
+    JOIN connected_bookings cb ON cbs.connected_booking_id = cb.connected_booking_id
+    WHERE cb.booking_status != 'cancelled'
+    GROUP BY r.route_id, r.name, op.name, dp.name;
+    
+    -- Get all routes that have either direct or connected bookings
+    INSERT INTO temp_all_routes
+    SELECT DISTINCT route_id, route_name, origin_port, destination_port 
+    FROM temp_direct_route_revenue
+    
+    UNION
+    
+    SELECT DISTINCT route_id, route_name, origin_port, destination_port 
+    FROM temp_connected_route_revenue;
+    
+    -- Select the top routes with combined revenue, safely handling NULL values
+    SELECT 
+        r.route_id,
+        r.route_name,
+        r.origin_port,
+        r.destination_port,
+        COALESCE(d.booking_count, 0) + COALESCE(c.booking_count, 0) AS total_bookings,
+        COALESCE(d.revenue, 0) + COALESCE(c.revenue, 0) AS total_revenue
+    FROM temp_all_routes r
+    LEFT JOIN temp_direct_route_revenue d ON r.route_id = d.route_id
+    LEFT JOIN temp_connected_route_revenue c ON r.route_id = c.route_id
+    ORDER BY total_revenue DESC
+    LIMIT p_limit;
+    
+    -- Clean up temporary tables
+    DROP TEMPORARY TABLE IF EXISTS temp_direct_route_revenue;
+    DROP TEMPORARY TABLE IF EXISTS temp_connected_route_revenue;
+    DROP TEMPORARY TABLE IF EXISTS temp_all_routes;
+END//
+DELIMITER ;
+
+-- Fixed get_admin_recent_activities procedure
+DELIMITER //
+DROP PROCEDURE IF EXISTS get_admin_recent_activities//
+CREATE PROCEDURE get_admin_recent_activities(
+    IN p_limit INT
+)
+BEGIN
+    -- Get recent user registrations
+    SELECT 
+        'user_registration' as activity_type,
+        user_id,
+        username,
+        email,
+        created_at as activity_time
+    FROM users
+    ORDER BY created_at DESC
+    LIMIT p_limit;
+    
+    -- Get recent direct bookings - with safer price handling
+    SELECT 
+        'direct_booking' as activity_type,
+        cb.booking_id as id,
+        u.username,
+        c.description as cargo_description,
+        COALESCE(cb.price, 0) as amount,
+        cb.booking_status as status,
+        cb.booking_date as activity_time
+    FROM cargo_bookings cb
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    ORDER BY cb.booking_date DESC
+    LIMIT p_limit;
+    
+    -- Get recent connected bookings - with safer price handling
+    SELECT 
+        'connected_booking' as activity_type,
+        cb.connected_booking_id as id,
+        u.username,
+        c.description as cargo_description,
+        COALESCE(cb.total_price, 0) as amount,
+        cb.booking_status as status,
+        cb.booking_date as activity_time
+    FROM connected_bookings cb
+    JOIN users u ON cb.user_id = u.user_id
+    JOIN cargo c ON cb.cargo_id = c.cargo_id
+    ORDER BY cb.booking_date DESC
+    LIMIT p_limit;
+    
+    -- Get recent schedule creations
+    SELECT 
+        'schedule_creation' as activity_type,
+        s.schedule_id as id,
+        sh.name as ship_name,
+        r.name as route_name,
+        s.departure_date,
+        s.arrival_date,
+        s.created_at as activity_time
+    FROM schedules s
+    JOIN ships sh ON s.ship_id = sh.ship_id
+    JOIN routes r ON s.route_id = r.route_id
+    ORDER BY s.created_at DESC
+    LIMIT p_limit;
+END//
+DELIMITER ;
+
+SELECT 
+    r.role_name,
+    COUNT(DISTINCT ur.user_id) as user_count
+FROM 
+    roles r
+LEFT JOIN 
+    user_roles ur ON r.role_id = ur.role_id
+GROUP BY 
+    r.role_name
+ORDER BY 
+    user_count DESC;
+
+

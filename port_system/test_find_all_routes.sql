@@ -89,3 +89,10 @@ CALL delete_port(61, @status, @message);
 
 -- Display the results
 SELECT @status AS deletion_status, @message AS result_message;
+
+select * from schedules;
+
+select * from routes where route_id = 1;
+
+
+select * from users;
