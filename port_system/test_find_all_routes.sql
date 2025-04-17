@@ -96,3 +96,9 @@ select * from routes where route_id = 1;
 
 
 select * from users;
+
+
+select * from schedules;
+select * from cargo;
+
+select * from cargo_bookings;

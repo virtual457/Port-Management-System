@@ -357,16 +357,4 @@ UPDATE cargo SET status = 'pending' WHERE cargo_id IN (
 -- SELECT 'Connected Bookings' AS entity, COUNT(*) AS count FROM connected_bookings;
 -- SELECT 'Connected Booking Segments' AS entity, COUNT(*) AS count FROM connected_booking_segments;
 
-
-select * from connected_bookings where user_id = 17;
-
-select * from connected_booking_segments where connected_booking_id = 2;
-
-select * from schedules where schedule_id in (49,52);
-
-select * from routes where route_id in (44,47);
-
-select * from cargo_bookings where user_id = 17;
-
-
-show tables;
+select * from schedules;

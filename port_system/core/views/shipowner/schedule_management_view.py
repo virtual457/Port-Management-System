@@ -13,7 +13,6 @@ def manage_schedules(request):
         messages.error(request, "You must be logged in to access this page")
         return redirect('login')
     
-    # Get filter parameters
     ship_name = request.GET.get('ship_name', '')
     port_name = request.GET.get('port_name', '')
     status = request.GET.get('status', '')
@@ -21,11 +20,9 @@ def manage_schedules(request):
     date_to = request.GET.get('date_to', '')
     berth_number = request.GET.get('berth_number', '')
     
-    # Build the SQL query with filters
     query_params = [user_id]
     filter_clauses = []
     
-    # Fixed the SQL query to use table aliases for ambiguous column names
     base_query = """
         SELECT 
             s.schedule_id,
@@ -79,7 +76,7 @@ def manage_schedules(request):
         query_params.append(f"%{port_name}%")
     
     if status:
-        filter_clauses.append("s.status = %s")  # Using table alias
+        filter_clauses.append("s.status = %s")
         query_params.append(status)
     
     if date_from:
@@ -108,11 +105,9 @@ def manage_schedules(request):
     with connection.cursor() as cursor:
         cursor.execute(base_query, query_params)
         
-        # Convert tuples to dictionaries
         columns = [col[0] for col in cursor.description]
         schedules_data = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        # Get counts for different statuses - fixed query to use table alias
         cursor.execute("""
             SELECT s.status, COUNT(*) FROM schedules s
             JOIN ships ON s.ship_id = ships.ship_id
@@ -131,7 +126,7 @@ def manage_schedules(request):
     
     # Pagination
     page = request.GET.get('page', 1)
-    paginator = Paginator(schedules_data, 10)  # Show 10 schedules per page
+    paginator = Paginator(schedules_data, 10)
     schedules = paginator.get_page(page)
     
     context = {
@@ -186,10 +181,8 @@ def update_schedule_status(request):
                     FROM schedules s
                     WHERE s.schedule_id = %s
                 """, [new_status, reason, request.session.get('user_id'), schedule_id])
-            
-            # Handle berth status changes based on new schedule status
+
             if new_status == 'completed':
-                # Free up berths that were occupied
                 cursor.execute("""
                     UPDATE berths 
                     SET status = 'active'
@@ -198,8 +191,6 @@ def update_schedule_status(request):
                         WHERE schedule_id = %s
                     ) AND status = 'occupied'
                 """, [schedule_id])
-                
-                # Update ship status to docked at destination
                 cursor.execute("""
                     UPDATE ships 
                     SET status = 'docked', 
@@ -216,7 +207,6 @@ def update_schedule_status(request):
                 """, [schedule_id, schedule_id])
                 
             elif new_status == 'in_progress':
-                # Mark origin berth as available
                 cursor.execute("""
                     UPDATE berths 
                     SET status = 'active'
@@ -226,7 +216,6 @@ def update_schedule_status(request):
                     ) AND status = 'occupied'
                 """, [schedule_id])
                 
-                # Update ship status to in_transit
                 cursor.execute("""
                     UPDATE ships 
                     SET status = 'in_transit', 
@@ -238,7 +227,6 @@ def update_schedule_status(request):
                 """, [schedule_id])
                 
             elif new_status == 'cancelled':
-                # Free up all reserved berths
                 cursor.execute("""
                     UPDATE berths 
                     SET status = 'active'
@@ -272,7 +260,6 @@ def delete_schedule(request):
     
     try:
         with connection.cursor() as cursor:
-            # Get schedule info before deleting
             cursor.execute("""
                 SELECT ship_id, status, origin_berth_id, destination_berth_id
                 FROM schedules

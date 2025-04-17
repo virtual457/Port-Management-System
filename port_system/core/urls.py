@@ -93,7 +93,6 @@ urlpatterns = [
     path('customer/booking/<int:booking_id>/<str:booking_type>/', shipping_views.view_booking_details, name='booking-details'),
     path('customer/cancel-booking/<int:booking_id>/<str:booking_type>/', shipping_views.cancel_booking, name='cancel-booking'),
     path('api/cargo/<int:cargo_id>/', shipping_views.get_cargo_details, name='get-cargo-details'),
-    path('test-connected-routes/', shipping_views.test_connected_routes, name='test-connected-routes'),
     path('customer/support/', shipping_views.customer_support, name='customer-support'),
     
     path('customer/reports/', customer_reports, name='customer-reports'),

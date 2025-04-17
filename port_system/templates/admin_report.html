@@ -163,14 +163,15 @@
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Admin Menu</h5>
     <hr class="bg-light">
-    <a href="/admin/dashboard" class="active"><i class="bi bi-speedometer2 me-2"></i> Dashboard</a>
-    <a href="/admin/users"><i class="bi bi-people me-2"></i> Users</a>
-    <a href="/admin/ports"><i class="bi bi-geo-alt me-2"></i> Ports</a>
-    <a href="/admin/ships"><i class="bi bi-water me-2"></i> Ships</a>
-    <a href="/admin/routes"><i class="bi bi-map me-2"></i> Routes</a>
-    <a href="/admin/bookings"><i class="bi bi-calendar-check me-2"></i> Bookings</a>
-    <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
-    <a href="/admin/settings"><i class="bi bi-gear me-2"></i> Settings</a>
+    <div class="sidebar" id="sidebar">
+        <h5 class="text-center">Menu</h5>
+        <hr class="bg-light">
+        <a href="/admin/dashboard"><i class="bi bi-speedometer2 me-2"></i> Admin Dashboard</a>
+        <a href="/admin/manage-users"><i class="bi bi-people me-2"></i> Manage Users</a>
+        <a href="/admin/manage-ports"><i class="bi bi-geo-alt me-2"></i> Manage Ports</a>
+        <a href="/admin/manage-berths"><i class="bi bi-truck me-2"></i> Manage Berths</a>
+        <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
+    </div>
 </div>
 
 <!-- Navbar -->
@@ -181,24 +182,6 @@
             <i class="bi bi-speedometer2 me-2"></i> System Dashboard
         </a>
         <div class="d-flex ms-auto align-items-center">
-            <div class="dropdown me-3">
-                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="timeRangeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-calendar-range me-1"></i> 
-                    {% if selected_range == '7' %}Last 7 Days
-                    {% elif selected_range == '30' %}Last 30 Days
-                    {% elif selected_range == '90' %}Last 90 Days
-                    {% elif selected_range == '365' %}Last Year
-                    {% elif selected_range == 'all' %}All Time
-                    {% else %}Last 30 Days{% endif %}
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="timeRangeDropdown">
-                    <li><a class="dropdown-item" href="?range=7">Last 7 Days</a></li>
-                    <li><a class="dropdown-item" href="?range=30">Last 30 Days</a></li>
-                    <li><a class="dropdown-item" href="?range=90">Last 90 Days</a></li>
-                    <li><a class="dropdown-item" href="?range=365">Last Year</a></li>
-                    <li><a class="dropdown-item" href="?range=all">All Time</a></li>
-                </ul>
-            </div>
             <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
         </div>
     </div>

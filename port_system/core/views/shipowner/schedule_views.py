@@ -126,10 +126,8 @@ def create_schedule(request):
     # Use stored procedure to create schedule with berth assignments
     with connection.cursor() as cursor:
         try:
-            # Set up OUT parameters
             cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
 
-            # Escape notes to prevent SQL injection
             import pymysql
             safe_notes = pymysql.converters.escape_string(notes)
             
@@ -144,7 +142,6 @@ def create_schedule(request):
             );
             """)
             
-            # Get output parameters
             cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
             schedule_id, success, message = cursor.fetchone()
             print("schedule_id", schedule_id)
@@ -159,10 +156,8 @@ def create_schedule(request):
                 return redirect('create-schedule-form')
                 
         except Exception as e:
-            # Log the error for debugging
             print(f"Error creating schedule: {str(e)}")
             
-            # Handle constraint violation specifically
             if "valid_assignment_times" in str(e):
                 messages.error(request, "Berth booking times are invalid: arrival time must be earlier than departure time")
             else:
@@ -178,17 +173,14 @@ def get_available_berths(request, port_id):
         return JsonResponse({'error': 'Invalid request method'}, status=400)
     
     try:
-        # Parse JSON data
         data = json.loads(request.body)
         start_time = data.get('start_time')
         end_time = data.get('end_time')
         ship_type = data.get('ship_type')
         
-        # Use stored procedure to get available berths
         with connection.cursor() as cursor:
             cursor.callproc('get_available_berths', [port_id, start_time, end_time])
             
-            # Fetch results
             results = cursor.fetchall()
             
             berths = []
@@ -203,9 +195,7 @@ def get_available_berths(request, port_id):
                     'status': row[6]
                 }
                 
-                # Filter by ship type if needed
                 if ship_type:
-                    # Match berths compatible with ship type
                     if (ship_type == 'container' and berth['type'] in ['container', 'multipurpose']) or \
                        (ship_type == 'bulk' and berth['type'] in ['bulk', 'multipurpose']) or \
                        (ship_type == 'tanker' and berth['type'] == 'tanker') or \

@@ -10,6 +10,29 @@ import json
 # Import the role_required decorator
 from ..views import role_required
 
+
+
+
+@role_required('customer')
+def customer_support(request):
+    """
+    View function for the customer support page.
+    
+    This page displays humorous maritime-themed support content,
+    including contact methods, FAQs, and a support ticket form.
+    """
+    # Get the logged-in user's username to display in the navbar
+    username = request.user.username
+    
+    # You can add any context data needed for the template
+    context = {
+        'username': username,
+        # Add other context variables as needed
+        'page_title': 'S.O.S. Support Center',
+    }
+    
+    return render(request, 'customer_support.html', context)
+
 @role_required('customer')
 def find_shipping_options(request):
     """
@@ -27,13 +50,11 @@ def find_shipping_options(request):
     # Get all available ports for the origin/destination dropdowns
     print("=== Fetching ports ===")
     with connection.cursor() as cursor:
-        ports = []
-        cursor.execute("""
-            SELECT port_id, name, country, ST_Y(location) as lat, ST_X(location) as lng
-            FROM ports 
-            WHERE status = 'active'
-            ORDER BY name
-        """)
+        # Use stored procedure for getting ports
+        cursor.callproc('get_active_ports')
+        
+        # Get the result set
+        result = cursor.fetchall()
         
         ports = [
             {
@@ -43,19 +64,16 @@ def find_shipping_options(request):
                 'lat': row[3],
                 'lng': row[4]
             }
-            for row in cursor.fetchall()
+            for row in result
         ]
         print(f"Found {len(ports)} ports")
 
-        # Get user's cargo items
+        # Get user's cargo items using stored procedure
         print("=== Fetching user cargo ===")
-        cursor.execute("""
-            SELECT cargo_id, description, cargo_type, weight, dimensions 
-            FROM cargo 
-            WHERE user_id = %s
-            AND status IN ('pending', 'booked')
-            ORDER BY created_at DESC
-        """, [user_id])
+        cursor.callproc('get_user_cargo', [user_id])
+        
+        # Get the result set
+        result = cursor.fetchall()
         
         user_cargo = [
             {
@@ -65,13 +83,15 @@ def find_shipping_options(request):
                 'weight': row[3],
                 'dimensions': row[4]
             }
-            for row in cursor.fetchall()
+            for row in result
         ]
         print(f"Found {len(user_cargo)} cargo items")
         
-        # Get username for display
+        # Get username for display using stored procedure
         print("=== Fetching username ===")
-        cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+        cursor.callproc('get_user_username', [user_id])
+        
+        # Get the result set
         username_result = cursor.fetchone()
         username = username_result[0] if username_result else "Customer"
         print(f"Username: {username}")
@@ -92,12 +112,10 @@ def find_shipping_options(request):
         print(f"Max connections: {max_connections}")
         
         try:
-            # Call the find_all_routes procedure which calls find_direct_routes and find_connected_routes
+            # Call the find_all_routes procedure
             print("=== Calling find_all_routes ===")
             with connection.cursor() as cursor:
-                cursor.execute("""
-                    CALL find_all_routes(%s, %s, %s, %s, %s, %s)
-                """, [
+                cursor.callproc('find_all_routes', [
                     origin_port_id,
                     destination_port_id,
                     earliest_date,
@@ -106,7 +124,7 @@ def find_shipping_options(request):
                     max_connections
                 ])
                 
-                # Process direct routes (first result set)
+                # Process result set
                 if cursor.description:  # Check if we have results
                     columns = [col[0] for col in cursor.description]
                     for row in cursor.fetchall():
@@ -142,42 +160,9 @@ def find_shipping_options(request):
                             
                             connected_routes.append(route_dict)
                 
-                # Check if there's a second result set with connected routes
-                if max_connections > 0 and cursor.nextset() and cursor.description:
-                    columns = [col[0] for col in cursor.description]
-                    for row in cursor.fetchall():
-                        route_dict = dict(zip(columns, row))
-                        
-                        # Get segment details for connected routes
-                        segments = get_connected_route_segments(route_dict['schedule_ids'])
-                        route_dict['segments'] = segments
-                        
-                        # Calculate total duration and connection time
-                        if segments and len(segments) >= 2:
-                            first_departure = segments[0]['departure_date']
-                            last_arrival = segments[-1]['arrival_date']
-                            
-                            # Add first and last port names and total duration
-                            route_dict['first_origin'] = segments[0]['origin_port']
-                            route_dict['last_destination'] = segments[-1]['destination_port']
-                            route_dict['first_departure'] = first_departure
-                            route_dict['last_arrival'] = last_arrival
-                            route_dict['total_duration'] = (last_arrival - first_departure).days
-                            
-                            # Calculate total connection time
-                            total_connection_time = 0
-                            for i in range(len(segments) - 1):
-                                if 'connection_time' in segments[i]:
-                                    total_connection_time += segments[i]['connection_time']
-                            
-                            route_dict['total_connection_time'] = total_connection_time
-                        
-                        connected_routes.append(route_dict)
-                
                 print(f"Found {len(direct_routes)} direct routes and {len(connected_routes)} connected routes")
             
             # Combine all routes for the global shipping_options list
-            # This maintains backward compatibility with the template
             shipping_options = direct_routes + connected_routes
             print(f"Total shipping options: {len(shipping_options)}")
         
@@ -185,8 +170,7 @@ def find_shipping_options(request):
             print(f"Error in find_shipping_options: {str(e)}")
             print(f"Error type: {type(e)}")
             messages.error(request, f"Error searching for shipping options: {str(e)}")
-    
-        # Add latitude/longitude information for direct routes if missing
+
         with connection.cursor() as cursor:
             for route in direct_routes:
                 if 'origin_lat' not in route or 'origin_lng' not in route or 'destination_lat' not in route or 'destination_lng' not in route:
@@ -212,7 +196,7 @@ def find_shipping_options(request):
                         route['origin_lng'] = loc_data[1]
                         route['destination_lat'] = loc_data[2]
                         route['destination_lng'] = loc_data[3]
-
+    
     context = {
         'username': username,
         'ports': ports,
@@ -222,12 +206,6 @@ def find_shipping_options(request):
         'direct_routes': direct_routes,
         'connected_routes': connected_routes
     }
-    
-    # Debug output
-    print("=== Direct routes ===")
-    print(context.get('direct_routes'))
-    print("=== Connected routes ===")
-    print(context.get('connected_routes'))
     
     return render(request, 'find_shipping_options.html', context)
 
@@ -242,37 +220,10 @@ def get_connected_route_segments(schedule_ids):
         schedule_id_list = schedule_ids.split(',')
         
         for i, schedule_id in enumerate(schedule_id_list):
-            cursor.execute("""
-                SELECT
-                    s.schedule_id,
-                    s.ship_id,
-                    ships.name AS ship_name,
-                    ships.ship_type,
-                    r.origin_port_id,
-                    op.name AS origin_port,
-                    ST_Y(op.location) AS origin_lat,
-                    ST_X(op.location) AS origin_lng,
-                    r.destination_port_id,
-                    dp.name AS destination_port,
-                    ST_Y(dp.location) AS destination_lat,
-                    ST_X(dp.location) AS destination_lng,
-                    s.departure_date,
-                    s.arrival_date,
-                    TIMESTAMPDIFF(DAY, s.departure_date, s.arrival_date) AS duration
-                FROM
-                    schedules s
-                JOIN
-                    routes r ON s.route_id = r.route_id
-                JOIN
-                    ships ON s.ship_id = ships.ship_id
-                JOIN
-                    ports op ON r.origin_port_id = op.port_id
-                JOIN
-                    ports dp ON r.destination_port_id = dp.port_id
-                WHERE
-                    s.schedule_id = %s
-            """, [schedule_id])
+            # Use stored procedure to get segment details
+            cursor.callproc('get_route_segment_details', [schedule_id])
             
+            # Get the result set
             segment_data = cursor.fetchone()
             if segment_data:
                 columns = [col[0] for col in cursor.description]
@@ -280,42 +231,19 @@ def get_connected_route_segments(schedule_ids):
                 
                 # Calculate connection time to next segment (if not the last segment)
                 if i < len(schedule_id_list) - 1:
-                    cursor.execute("""
-                        SELECT
-                            TIMESTAMPDIFF(HOUR, s1.arrival_date, s2.departure_date) / 24.0
-                        FROM
-                            schedules s1, schedules s2
-                        WHERE
-                            s1.schedule_id = %s AND s2.schedule_id = %s
-                    """, [schedule_id, schedule_id_list[i + 1]])
+                    # Use stored procedure to get connection time
+                    cursor.callproc('get_connection_time', [
+                        schedule_id,
+                        schedule_id_list[i + 1]
+                    ])
                     
+                    # Get the result set
                     connection_time = cursor.fetchone()
                     segment['connection_time'] = round(connection_time[0], 1) if connection_time else 0
                 
                 segments.append(segment)
     
     return segments
-
-
-@role_required('customer')
-def customer_support(request):
-    """
-    View function for the customer support page.
-    
-    This page displays humorous maritime-themed support content,
-    including contact methods, FAQs, and a support ticket form.
-    """
-    # Get the logged-in user's username to display in the navbar
-    username = request.user.username
-    
-    # You can add any context data needed for the template
-    context = {
-        'username': username,
-        # Add other context variables as needed
-        'page_title': 'S.O.S. Support Center',
-    }
-    
-    return render(request, 'customer_support.html', context)
 
 @role_required('customer')
 def book_direct_cargo(request, schedule_id):
@@ -336,63 +264,42 @@ def book_direct_cargo(request, schedule_id):
     if request.method == 'POST':
         try:
             with connection.cursor() as cursor:
-                # Get price information
+                # Set up OUT parameters in the database session
+                cursor.execute("SET @p_booking_id = 0")
+                cursor.execute("SET @p_success = FALSE")
+                cursor.execute("SET @p_message = ''")
+                
+                # Call the stored procedure with properly prepared parameters
                 cursor.execute("""
-                    SELECT 
-                        r.cost_per_kg,
-                        c.weight,
-                        r.cost_per_kg * c.weight AS total_price
-                    FROM 
-                        schedules s
-                    JOIN 
-                        routes r ON s.route_id = r.route_id
-                    JOIN 
-                        cargo c ON c.cargo_id = %s
-                    WHERE 
-                        s.schedule_id = %s
-                """, [cargo_id, schedule_id])
-                
-                price_info = cursor.fetchone()
-                if not price_info:
-                    messages.error(request, "Could not calculate booking price")
-                    return redirect('find-shipping-options')
-                
-                total_price = price_info[2]
-                
-                # Create the booking
-                cursor.execute("""
-                    INSERT INTO cargo_bookings (
-                        cargo_id, schedule_id, user_id, 
-                        booking_date, booking_status, payment_status, 
-                        price, notes
-                    ) VALUES (
-                        %s, %s, %s, 
-                        NOW(), 'confirmed', 'paid', 
-                        %s, %s
+                    CALL create_direct_booking(
+                        %s, %s, %s, %s, 
+                        @p_booking_id, @p_success, @p_message
                     )
                 """, [
-                    cargo_id, schedule_id, user_id,
-                    total_price, request.POST.get('notes', '')
+                    cargo_id,
+                    schedule_id,
+                    user_id,
+                    request.POST.get('notes', '')
                 ])
                 
-                # Update cargo status
-                cursor.execute("""
-                    UPDATE cargo 
-                    SET status = 'booked'
-                    WHERE cargo_id = %s AND user_id = %s
-                """, [cargo_id, user_id])
+                # Retrieve the output parameters
+                cursor.execute("SELECT @p_booking_id, @p_success, @p_message")
+                result = cursor.fetchone()
                 
-                # Update schedule available capacity
-                cursor.execute("""
-                    UPDATE schedules
-                    SET max_cargo = max_cargo - %s
-                    WHERE schedule_id = %s
-                """, [price_info[1], schedule_id])
-                
-                booking_id = cursor.lastrowid
-                messages.success(request, f"Cargo booked successfully! Booking ID: {booking_id}")
-                
-                return redirect('customer-bookings')  # Redirect to bookings page
+                if result:
+                    booking_id = result[0]
+                    success = bool(result[1])
+                    message = result[2]
+                    
+                    if success:
+                        messages.success(request, message)
+                        return redirect('customer-bookings')
+                    else:
+                        messages.error(request, message)
+                        return redirect('find-shipping-options')
+                else:
+                    messages.error(request, "Error processing booking")
+                    return redirect('find-shipping-options')
         
         except Exception as e:
             messages.error(request, f"Error booking cargo: {str(e)}")
@@ -401,58 +308,29 @@ def book_direct_cargo(request, schedule_id):
     # Display booking confirmation page
     try:
         with connection.cursor() as cursor:
-            # Get schedule details
-            cursor.execute("""
-                SELECT 
-                    s.schedule_id,
-                    s.ship_id,
-                    ships.name AS ship_name,
-                    ships.ship_type,
-                    r.route_id,
-                    r.name AS route_name,
-                    op.name AS origin_port,
-                    dp.name AS destination_port,
-                    s.departure_date,
-                    s.arrival_date,
-                    r.cost_per_kg,
-                    r.distance
-                FROM 
-                    schedules s
-                JOIN 
-                    routes r ON s.route_id = r.route_id
-                JOIN 
-                    ships ON s.ship_id = ships.ship_id
-                JOIN 
-                    ports op ON r.origin_port_id = op.port_id
-                JOIN 
-                    ports dp ON r.destination_port_id = dp.port_id
-                WHERE 
-                    s.schedule_id = %s
-            """, [schedule_id])
+            # Use stored procedure to get schedule details
+            cursor.callproc('get_schedule_details', [schedule_id])
             
+            # Get the result set
             schedule_data = cursor.fetchone()
             if not schedule_data:
                 messages.error(request, "Schedule not found")
                 return redirect('find-shipping-options')
             
+            # Create dictionary from result
             schedule_columns = [col[0] for col in cursor.description]
             schedule = dict(zip(schedule_columns, schedule_data))
             
-            # Get cargo details
-            cursor.execute("""
-                SELECT 
-                    cargo_id, description, cargo_type, weight, dimensions
-                FROM 
-                    cargo
-                WHERE 
-                    cargo_id = %s AND user_id = %s
-            """, [cargo_id, user_id])
+            # Use stored procedure to get cargo details
+            cursor.callproc('get_cargo_details', [cargo_id, user_id])
             
+            # Get the result set
             cargo_data = cursor.fetchone()
             if not cargo_data:
                 messages.error(request, "Cargo not found or does not belong to you")
                 return redirect('find-shipping-options')
             
+            # Create dictionary from result
             cargo_columns = [col[0] for col in cursor.description]
             cargo = dict(zip(cargo_columns, cargo_data))
             
@@ -460,7 +338,7 @@ def book_direct_cargo(request, schedule_id):
             total_price = schedule['cost_per_kg'] * cargo['weight']
             
             # Get username
-            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+            cursor.callproc('get_user_username', [user_id])
             username = cursor.fetchone()[0]
     
     except Exception as e:
@@ -497,120 +375,61 @@ def book_connected_route(request, route_id):
     if request.method == 'POST':
         try:
             with connection.cursor() as cursor:
-                # First, we need to get all the schedule IDs for this route
-                schedule_ids = route_id.split(',')  # Route ID contains concatenated schedule IDs
+                # Schedule IDs from route_id
+                schedule_ids = route_id.split(',')
                 
-                # Get origin and destination port IDs
-                cursor.execute("""
-                    SELECT 
-                        r1.origin_port_id AS origin_port_id,
-                        r2.destination_port_id AS destination_port_id
-                    FROM 
-                        schedules s1
-                    JOIN 
-                        routes r1 ON s1.route_id = r1.route_id
-                    JOIN 
-                        schedules s2 ON s2.schedule_id = %s
-                    JOIN 
-                        routes r2 ON s2.route_id = r2.route_id
-                    WHERE 
-                        s1.schedule_id = %s
-                """, [schedule_ids[-1], schedule_ids[0]])
+                # Use stored procedure to get route endpoints
+                cursor.callproc('get_connected_route_endpoints', [
+                    schedule_ids[0],
+                    schedule_ids[-1]
+                ])
                 
+                # Get the result set
                 port_data = cursor.fetchone()
                 if not port_data:
                     messages.error(request, "Could not determine route endpoints")
                     return redirect('find-shipping-options')
                 
+                # Extract data
                 origin_port_id, destination_port_id = port_data
                 
-                # Get total price by summing segment prices
-                cursor.execute("""
-                    SELECT 
-                        SUM(r.cost_per_kg * c.weight) AS total_price,
-                        c.weight
-                    FROM 
-                        cargo c
-                    JOIN (
-                        SELECT 
-                            schedule_id, 
-                            route_id
-                        FROM 
-                            schedules
-                        WHERE 
-                            schedule_id IN ({})
-                    ) s ON 1=1
-                    JOIN 
-                        routes r ON s.route_id = r.route_id
-                    WHERE 
-                        c.cargo_id = %s
-                    GROUP BY 
-                        c.weight
-                """.format(','.join(['%s'] * len(schedule_ids))), schedule_ids + [cargo_id])
+                schedule_ids_str = ','.join(schedule_ids)
+                cursor.execute(f"CALL calculate_connected_route_price('{schedule_ids_str}', {cargo_id})")
                 
+                # Get the result set
                 price_data = cursor.fetchone()
                 if not price_data:
                     messages.error(request, "Could not calculate booking price")
                     return redirect('find-shipping-options')
                 
+                # Extract data
                 total_price, cargo_weight = price_data
                 
-                # Create the connected booking
-                cursor.execute("""
-                    INSERT INTO connected_bookings (
-                        cargo_id, user_id, origin_port_id, destination_port_id,
-                        booking_date, booking_status, payment_status, 
-                        total_price, notes
-                    ) VALUES (
-                        %s, %s, %s, %s,
-                        NOW(), 'confirmed', 'paid', 
-                        %s, %s
-                    )
-                """, [
-                    cargo_id, user_id, origin_port_id, destination_port_id,
-                    total_price, request.POST.get('notes', '')
+                # Use stored procedure to create connected booking
+                cursor.callproc('create_connected_booking', [
+                    cargo_id,
+                    user_id,
+                    origin_port_id,
+                    destination_port_id,
+                    total_price,
+                    request.POST.get('notes', '')
                 ])
                 
-                connected_booking_id = cursor.lastrowid
+                # Get the output parameter (booking_id)
+                connected_booking_id = cursor.fetchone()[0]
                 
                 # Add each segment to the connected_booking_segments table
                 for i, schedule_id in enumerate(schedule_ids):
-                    # Calculate segment price
-                    cursor.execute("""
-                        SELECT 
-                            r.cost_per_kg * %s AS segment_price
-                        FROM 
-                            schedules s
-                        JOIN 
-                            routes r ON s.route_id = r.route_id
-                        WHERE 
-                            s.schedule_id = %s
-                    """, [cargo_weight, schedule_id])
-                    
-                    segment_price = cursor.fetchone()[0]
-                    
-                    # Insert segment
-                    cursor.execute("""
-                        INSERT INTO connected_booking_segments (
-                            connected_booking_id, schedule_id, segment_order, segment_price
-                        ) VALUES (
-                            %s, %s, %s, %s
-                        )
-                    """, [connected_booking_id, schedule_id, i + 1, segment_price])
-                    
-                    # Update schedule available capacity
-                    cursor.execute("""
-                        UPDATE schedules
-                        SET max_cargo = max_cargo - %s
-                        WHERE schedule_id = %s
-                    """, [cargo_weight, schedule_id])
+                    # Use stored procedure to create booking segment
+                    cursor.callproc('create_booking_segment', [
+                        connected_booking_id,
+                        schedule_id,
+                        i + 1,
+                        cargo_weight
+                    ])
                 
-                # Update cargo status
-                cursor.execute("""
-                    UPDATE cargo 
-                    SET status = 'booked'
-                    WHERE cargo_id = %s AND user_id = %s
-                """, [cargo_id, user_id])
+                # Use stored procedure to update cargo status
+                cursor.callproc('update_cargo_status', [cargo_id, user_id, 'booked'])
                 
                 messages.success(request, f"Connected route booked successfully! Booking ID: {connected_booking_id}")
                 
@@ -623,24 +442,16 @@ def book_connected_route(request, route_id):
     # Display booking confirmation page
     try:
         with connection.cursor() as cursor:
-            # Get schedule IDs for this route
-            schedule_ids = route_id.split(',')
+            # Use stored procedure to get cargo details
+            cursor.callproc('get_cargo_details', [cargo_id, user_id])
             
-            # Get cargo details
-            cursor.execute("""
-                SELECT 
-                    cargo_id, description, cargo_type, weight, dimensions
-                FROM 
-                    cargo
-                WHERE 
-                    cargo_id = %s AND user_id = %s
-            """, [cargo_id, user_id])
-            
+            # Get the result set
             cargo_data = cursor.fetchone()
             if not cargo_data:
                 messages.error(request, "Cargo not found or does not belong to you")
                 return redirect('find-shipping-options')
             
+            # Create dictionary from result
             cargo_columns = [col[0] for col in cursor.description]
             cargo = dict(zip(cargo_columns, cargo_data))
             
@@ -659,7 +470,7 @@ def book_connected_route(request, route_id):
             total_duration = (last_arrival - first_departure).days if first_departure and last_arrival else 0
             
             # Get username
-            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+            cursor.callproc('get_user_username', [user_id])
             username = cursor.fetchone()[0]
     
     except Exception as e:
@@ -680,7 +491,6 @@ def book_connected_route(request, route_id):
     
     return render(request, 'book_cargo.html', context)
 
-
 @role_required('customer')
 def view_bookings(request):
     """
@@ -692,101 +502,35 @@ def view_bookings(request):
     
     try:
         with connection.cursor() as cursor:
-            # Get direct bookings
-            cursor.execute("""
-                SELECT 
-                    b.booking_id,
-                    b.cargo_id,
-                    c.description AS cargo_description,
-                    b.schedule_id,
-                    s.departure_date,
-                    s.arrival_date,
-                    r.name AS route_name,
-                    op.name AS origin_port,
-                    dp.name AS destination_port,
-                    b.booking_status,
-                    b.payment_status,
-                    b.price,
-                    b.booking_date,
-                    ships.name AS ship_name
-                FROM 
-                    cargo_bookings b
-                JOIN 
-                    cargo c ON b.cargo_id = c.cargo_id
-                JOIN 
-                    schedules s ON b.schedule_id = s.schedule_id
-                JOIN 
-                    routes r ON s.route_id = r.route_id
-                JOIN 
-                    ships ON s.ship_id = ships.ship_id
-                JOIN 
-                    ports op ON r.origin_port_id = op.port_id
-                JOIN 
-                    ports dp ON r.destination_port_id = dp.port_id
-                WHERE 
-                    b.user_id = %s
-                ORDER BY 
-                    b.booking_date DESC
-            """, [user_id])
+            # Use stored procedure to get direct bookings
+            cursor.callproc('get_user_direct_bookings', [user_id])
             
-            columns = [col[0] for col in cursor.description]
-            direct_bookings = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            # Get the result set
+            direct_results = cursor.fetchall()
+            direct_columns = [col[0] for col in cursor.description]
+            direct_bookings = [dict(zip(direct_columns, row)) for row in direct_results]
             
-            # Get connected bookings
-            cursor.execute("""
-                SELECT 
-                    cb.connected_booking_id,
-                    cb.cargo_id,
-                    c.description AS cargo_description,
-                    op.name AS origin_port,
-                    dp.name AS destination_port,
-                    cb.booking_status,
-                    cb.payment_status,
-                    cb.total_price,
-                    cb.booking_date,
-                    COUNT(cbs.segment_id) AS total_segments
-                FROM 
-                    connected_bookings cb
-                JOIN 
-                    cargo c ON cb.cargo_id = c.cargo_id
-                JOIN 
-                    ports op ON cb.origin_port_id = op.port_id
-                JOIN 
-                    ports dp ON cb.destination_port_id = dp.port_id
-                JOIN 
-                    connected_booking_segments cbs ON cb.connected_booking_id = cbs.connected_booking_id
-                WHERE 
-                    cb.user_id = %s
-                GROUP BY 
-                    cb.connected_booking_id
-                ORDER BY 
-                    cb.booking_date DESC
-            """, [user_id])
+            # Use stored procedure to get connected bookings
+            cursor.callproc('get_user_connected_bookings', [user_id])
             
-            columns = [col[0] for col in cursor.description]
-            connected_bookings = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            # Get the result set
+            connected_results = cursor.fetchall()
+            connected_columns = [col[0] for col in cursor.description]
+            connected_bookings = [dict(zip(connected_columns, row)) for row in connected_results]
             
             # For each connected booking, get first departure and last arrival
             for booking in connected_bookings:
-                cursor.execute("""
-                    SELECT 
-                        MIN(s.departure_date) AS first_departure,
-                        MAX(s.arrival_date) AS last_arrival
-                    FROM 
-                        connected_booking_segments cbs
-                    JOIN 
-                        schedules s ON cbs.schedule_id = s.schedule_id
-                    WHERE 
-                        cbs.connected_booking_id = %s
-                """, [booking['connected_booking_id']])
+                # Use stored procedure to get booking dates
+                cursor.callproc('get_connected_booking_dates', [booking['connected_booking_id']])
                 
+                # Get the result set
                 dates = cursor.fetchone()
                 if dates:
                     booking['first_departure'] = dates[0]
                     booking['last_arrival'] = dates[1]
             
             # Get username
-            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+            cursor.callproc('get_user_username', [user_id])
             username = cursor.fetchone()[0]
     
     except Exception as e:
@@ -800,7 +544,6 @@ def view_bookings(request):
     
     return render(request, 'customer_bookings.html', context)
 
-
 @role_required('customer')
 def view_booking_details(request, booking_id, booking_type):
     """
@@ -811,138 +554,41 @@ def view_booking_details(request, booking_id, booking_type):
     try:
         with connection.cursor() as cursor:
             if booking_type == 'direct':
-                # Get direct booking details
-                cursor.execute("""
-                    SELECT 
-                        b.booking_id,
-                        b.cargo_id,
-                        c.description AS cargo_description,
-                        c.cargo_type,
-                        c.weight AS cargo_weight,
-                        c.dimensions AS cargo_dimensions,
-                        b.schedule_id,
-                        s.departure_date,
-                        s.arrival_date,
-                        r.name AS route_name,
-                        op.name AS origin_port,
-                        ST_Y(op.location) AS origin_lat,
-                        ST_X(op.location) AS origin_lng,
-                        dp.name AS destination_port,
-                        ST_Y(dp.location) AS destination_lat,
-                        ST_X(dp.location) AS destination_lng,
-                        r.distance,
-                        b.booking_status,
-                        b.payment_status,
-                        b.price,
-                        b.booking_date,
-                        b.notes,
-                        ships.name AS ship_name,
-                        ships.ship_type
-                    FROM 
-                        cargo_bookings b
-                    JOIN 
-                        cargo c ON b.cargo_id = c.cargo_id
-                    JOIN 
-                        schedules s ON b.schedule_id = s.schedule_id
-                    JOIN 
-                        routes r ON s.route_id = r.route_id
-                    JOIN 
-                        ships ON s.ship_id = ships.ship_id
-                    JOIN 
-                        ports op ON r.origin_port_id = op.port_id
-                    JOIN 
-                        ports dp ON r.destination_port_id = dp.port_id
-                    WHERE 
-                        b.booking_id = %s AND b.user_id = %s
-                """, [booking_id, user_id])
+                # Use stored procedure to get direct booking details
+                cursor.callproc('get_direct_booking_details', [booking_id, user_id])
                 
+                # Get the result set
                 result = cursor.fetchone()
                 if not result:
                     messages.error(request, "Booking not found or does not belong to you")
                     return redirect('customer-bookings')
                 
+                # Create dictionary from result
                 columns = [col[0] for col in cursor.description]
                 booking = dict(zip(columns, result))
                 segments = None
                 
             else:  # Connected booking
-                # Get connected booking details
-                cursor.execute("""
-                    SELECT 
-                        cb.connected_booking_id,
-                        cb.cargo_id,
-                        c.description AS cargo_description,
-                        c.cargo_type,
-                        c.weight AS cargo_weight,
-                        c.dimensions AS cargo_dimensions,
-                        op.name AS origin_port,
-                        dp.name AS destination_port,
-                        cb.booking_status,
-                        cb.payment_status,
-                        cb.total_price,
-                        cb.booking_date,
-                        cb.notes
-                    FROM 
-                        connected_bookings cb
-                    JOIN 
-                        cargo c ON cb.cargo_id = c.cargo_id
-                    JOIN 
-                        ports op ON cb.origin_port_id = op.port_id
-                    JOIN 
-                        ports dp ON cb.destination_port_id = dp.port_id
-                    WHERE 
-                        cb.connected_booking_id = %s AND cb.user_id = %s
-                """, [booking_id, user_id])
+                # Use stored procedure to get connected booking details
+                cursor.callproc('get_connected_booking_details', [booking_id, user_id])
                 
+                # Get the result set
                 result = cursor.fetchone()
                 if not result:
                     messages.error(request, "Connected booking not found or does not belong to you")
                     return redirect('customer-bookings')
                 
+                # Create dictionary from result
                 columns = [col[0] for col in cursor.description]
                 booking = dict(zip(columns, result))
                 
-                # Get segment details for this connected booking
-                cursor.execute("""
-                    SELECT 
-                        cbs.segment_id,
-                        cbs.segment_order,
-                        cbs.schedule_id,
-                        cbs.segment_price,
-                        s.departure_date,
-                        s.arrival_date,
-                        r.name AS route_name,
-                        op.name AS origin_port,
-                        op.port_id AS origin_port_id,
-                        ST_Y(op.location) AS origin_lat,
-                        ST_X(op.location) AS origin_lng,
-                        dp.name AS destination_port,
-                        dp.port_id AS destination_port_id,
-                        ST_Y(dp.location) AS destination_lat,
-                        ST_X(dp.location) AS destination_lng,
-                        r.distance,
-                        ships.name AS ship_name,
-                        ships.ship_type
-                    FROM 
-                        connected_booking_segments cbs
-                    JOIN 
-                        schedules s ON cbs.schedule_id = s.schedule_id
-                    JOIN 
-                        routes r ON s.route_id = r.route_id
-                    JOIN 
-                        ships ON s.ship_id = ships.ship_id
-                    JOIN 
-                        ports op ON r.origin_port_id = op.port_id
-                    JOIN 
-                        ports dp ON r.destination_port_id = dp.port_id
-                    WHERE 
-                        cbs.connected_booking_id = %s
-                    ORDER BY 
-                        cbs.segment_order
-                """, [booking_id])
+                # Use stored procedure to get segment details
+                cursor.callproc('get_connected_booking_segments', [booking_id])
                 
-                columns = [col[0] for col in cursor.description]
-                segments = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                # Get the result set
+                segment_results = cursor.fetchall()
+                segment_columns = [col[0] for col in cursor.description]
+                segments = [dict(zip(segment_columns, row)) for row in segment_results]
                 
                 # Calculate connection times
                 for i in range(len(segments) - 1):
@@ -956,7 +602,7 @@ def view_booking_details(request, booking_id, booking_type):
                     current_segment['connection_time'] = round(connection_hours / 24, 1)  # Convert to days
             
             # Get username
-            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
+            cursor.callproc('get_user_username', [user_id])
             username = cursor.fetchone()[0]
     
     except Exception as e:
@@ -972,105 +618,49 @@ def view_booking_details(request, booking_id, booking_type):
     
     return render(request, 'booking_details.html', context)
 
-
 @role_required('customer')
 def cancel_booking(request, booking_id, booking_type):
     """
-    Handle cancellation of a booking.
+    Handle cancellation of a booking using stored procedures.
     """
     if request.method != 'POST':
         return redirect('customer-bookings')
     
     user_id = request.session.get('user_id')
+    success = False
+    message = ''
     
     try:
         with connection.cursor() as cursor:
             if booking_type == 'direct':
-                # Get cargo ID and schedule ID for this booking
-                cursor.execute("""
-                    SELECT cargo_id, schedule_id, price
-                    FROM cargo_bookings
-                    WHERE booking_id = %s AND user_id = %s
-                """, [booking_id, user_id])
+                # Call the new stored procedure for direct bookings
+                args = [booking_id, user_id, 0, '']  # Last two are OUT params
+                result_args = cursor.callproc('cancel_booking_direct', args)
                 
-                booking_data = cursor.fetchone()
-                if not booking_data:
-                    messages.error(request, "Booking not found or does not belong to you")
-                    return redirect('customer-bookings')
-                
-                cargo_id, schedule_id, price = booking_data
-                
-                # Get cargo weight to restore schedule capacity
-                cursor.execute("SELECT weight FROM cargo WHERE cargo_id = %s", [cargo_id])
-                cargo_weight = cursor.fetchone()[0]
-                
-                # Update booking status
-                cursor.execute("""
-                    UPDATE cargo_bookings 
-                    SET booking_status = 'cancelled', payment_status = 'refunded'
-                    WHERE booking_id = %s AND user_id = %s
-                """, [booking_id, user_id])
-                
-                # Update cargo status back to pending
-                cursor.execute("""
-                    UPDATE cargo 
-                    SET status = 'pending'
-                    WHERE cargo_id = %s
-                """, [cargo_id])
-                
-                # Restore schedule capacity
-                cursor.execute("""
-                    UPDATE schedules
-                    SET max_cargo = max_cargo + %s
-                    WHERE schedule_id = %s
-                """, [cargo_weight, schedule_id])
-                
-                messages.success(request, "Booking cancelled successfully. Your payment will be refunded.")
+                # Process result
+                cursor.execute('SELECT @_cancel_booking_direct_2, @_cancel_booking_direct_3')
+                result = cursor.fetchone()
+                if result:
+                    success = bool(result[0])
+                    message = result[1]
             
             else:  # Connected booking
-                # Get cargo ID and all schedule IDs for this booking
-                cursor.execute("""
-                    SELECT cb.cargo_id, cbs.schedule_id
-                    FROM connected_bookings cb
-                    JOIN connected_booking_segments cbs ON cb.connected_booking_id = cbs.connected_booking_id
-                    WHERE cb.connected_booking_id = %s AND cb.user_id = %s
-                """, [booking_id, user_id])
+                # Call the new stored procedure for connected bookings
+                args = [booking_id, user_id, 0, '']
+                result_args = cursor.callproc('cancel_booking_connected', args)
                 
-                booking_data = cursor.fetchall()
-                if not booking_data:
-                    messages.error(request, "Booking not found or does not belong to you")
-                    return redirect('customer-bookings')
-                
-                cargo_id = booking_data[0][0]
-                schedule_ids = [row[1] for row in booking_data]
-                
-                # Get cargo weight to restore schedule capacity
-                cursor.execute("SELECT weight FROM cargo WHERE cargo_id = %s", [cargo_id])
-                cargo_weight = cursor.fetchone()[0]
-                
-                # Update connected booking status
-                cursor.execute("""
-                    UPDATE connected_bookings 
-                    SET booking_status = 'cancelled', payment_status = 'refunded'
-                    WHERE connected_booking_id = %s AND user_id = %s
-                """, [booking_id, user_id])
-                
-                # Update cargo status back to pending
-                cursor.execute("""
-                    UPDATE cargo 
-                    SET status = 'pending'
-                    WHERE cargo_id = %s
-                """, [cargo_id])
-                
-                # Restore schedule capacity for all segments
-                for schedule_id in schedule_ids:
-                    cursor.execute("""
-                        UPDATE schedules
-                        SET max_cargo = max_cargo + %s
-                        WHERE schedule_id = %s
-                    """, [cargo_weight, schedule_id])
-                
-                messages.success(request, "Connected booking cancelled successfully. Your payment will be refunded.")
+                # Process result
+                cursor.execute('SELECT @_cancel_booking_connected_2, @_cancel_booking_connected_3')
+                result = cursor.fetchone()
+                if result:
+                    success = bool(result[0])
+                    message = result[1]
+        
+        # Display appropriate message based on result
+        if success:
+            messages.success(request, message)
+        else:
+            messages.error(request, message if message else "An error occurred during cancellation.")
     
     except Exception as e:
         messages.error(request, f"Error cancelling booking: {str(e)}")
@@ -1087,16 +677,15 @@ def get_cargo_details(request, cargo_id):
     
     try:
         with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT cargo_id, description, cargo_type, weight, dimensions
-                FROM cargo
-                WHERE cargo_id = %s AND user_id = %s
-            """, [cargo_id, user_id])
+            # Use stored procedure to get cargo details
+            cursor.callproc('get_cargo_details_api', [cargo_id, user_id])
             
+            # Get the result set
             cargo_data = cursor.fetchone()
             if not cargo_data:
                 return JsonResponse({'error': 'Cargo not found'}, status=404)
             
+            # Create dictionary from result
             columns = [col[0] for col in cursor.description]
             cargo = dict(zip(columns, cargo_data))
             
@@ -1106,33 +695,7 @@ def get_cargo_details(request, cargo_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-@role_required('customer')
-def test_connected_routes(request):
-    """
-    Test function to call find_connected_routes procedure and display results.
-    """
-    try:
-        with connection.cursor() as cursor:
-            print("Calling find_connected_routes procedure...")
-            cursor.execute("""
-                CALL find_connected_routes(1, 3, '2024-03-01', '2024-03-31', 1)
-            """)
-            
-            # Get the results
-            columns = [col[0] for col in cursor.description]
-            results = []
-            for row in cursor.fetchall():
-                route_dict = dict(zip(columns, row))
-                results.append(route_dict)
-            
-            print(f"Found {len(results)} connected routes")
-            for route in results:
-                print("\nRoute details:")
-                for key, value in route.items():
-                    print(f"{key}: {value}")
-            
-            return JsonResponse({'results': results})
-            
-    except Exception as e:
-        print(f"Error in test_connected_routes: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+

@@ -528,10 +528,7 @@ BEGIN
     ORDER BY ba.arrival_time DESC;
 END//
 DELIMITER ;
--- Check roles assigned to Chandan (user_id = 1)
-select * from user_roles where user_id = 1; 
 
-select * from users;
 
 
 -- New ADditions
@@ -2106,18 +2103,11 @@ BEGIN
 END//
 DELIMITER ;
 
-select * from connected_bookings;
 
-select * from connected_booking_segments;
-
-select * from connected_bookings;
-
-select * from cargo_bookings;
 
 
 ---- admin related
 
-call get_admin_dashboard_stats();
 
 DELIMITER //
 DROP PROCEDURE IF EXISTS get_admin_dashboard_stats//
@@ -2491,8 +2481,6 @@ BEGIN
 END//
 DELIMITER ;
 
-select * from roles;
-select * from user_roles where role_id = 4;
 
 select sum(price) from cargo_bookings where payment_status = 'paid';
 
@@ -2869,16 +2857,1378 @@ BEGIN
 END//
 DELIMITER ;
 
-SELECT 
-    r.role_name,
-    COUNT(DISTINCT ur.user_id) as user_count
-FROM 
-    roles r
-LEFT JOIN 
-    user_roles ur ON r.role_id = ur.role_id
-GROUP BY 
-    r.role_name
-ORDER BY 
-    user_count DESC;
+--- Bookling section
+drop PROCEDURE create_direct_booking//
+DELIMITER //
+CREATE PROCEDURE create_direct_booking(
+    IN p_cargo_id INT,
+    IN p_schedule_id INT,
+    IN p_user_id INT,
+    IN p_notes TEXT,
+    OUT p_booking_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE cargo_weight DECIMAL(10, 2);
+    DECLARE total_price DECIMAL(12, 2);
+    
+    -- Transaction to ensure all operations complete or none do
+    START TRANSACTION;
+    
+    -- Calculate booking price
+    SELECT 
+        r.cost_per_kg * c.weight,
+        c.weight INTO total_price, cargo_weight
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        cargo c ON c.cargo_id = p_cargo_id
+    WHERE 
+        s.schedule_id = p_schedule_id;
 
 
+    IF total_price IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Could not calculate booking price';
+        ROLLBACK;
+    ELSE
+        -- Create the booking
+        INSERT INTO cargo_bookings (
+            cargo_id, schedule_id, user_id, 
+            booking_date, booking_status, payment_status, 
+            price, notes
+        ) VALUES (
+            p_cargo_id, p_schedule_id, p_user_id, 
+            NOW(), 'confirmed', 'paid', 
+            total_price, p_notes
+        );
+        
+        SET p_booking_id = LAST_INSERT_ID();
+        
+        -- Update cargo status (trigger handles this but keeping for clarity)
+        UPDATE cargo 
+        SET status = 'booked'
+        WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+        
+        -- Update schedule available capacity
+        UPDATE schedules
+        SET max_cargo = max_cargo - cargo_weight
+        WHERE schedule_id = p_schedule_id;
+        
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Cargo booked successfully! Booking ID: ', p_booking_id);
+        COMMIT;
+    END IF;
+END//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE create_direct_booking(
+    IN p_cargo_id INT,
+    IN p_schedule_id INT,
+    IN p_user_id INT,
+    IN p_notes TEXT,
+    OUT p_booking_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE cargo_weight DECIMAL(10, 2);
+    DECLARE total_price DECIMAL(12, 2);
+    DECLARE cargo_status VARCHAR(50);
+    
+    -- Transaction to ensure all operations complete or none do
+    START TRANSACTION;
+    
+    -- Check if cargo is already booked
+    SELECT status INTO cargo_status
+    FROM cargo 
+    WHERE cargo_id = p_cargo_id;
+    
+    IF cargo_status = 'booked' THEN
+        SET p_success = FALSE;
+        SET p_message = 'Cargo is already booked';
+        ROLLBACK;
+    ELSE
+        -- Calculate booking price
+        SELECT
+            r.cost_per_kg * c.weight,
+            c.weight INTO total_price, cargo_weight
+        FROM
+            schedules s
+        JOIN
+            routes r ON s.route_id = r.route_id
+        JOIN
+            cargo c ON c.cargo_id = p_cargo_id
+        WHERE
+            s.schedule_id = p_schedule_id;
+            
+        IF total_price IS NULL THEN
+            SET p_success = FALSE;
+            SET p_message = 'Could not calculate booking price';
+            ROLLBACK;
+        ELSE
+            -- Create the booking
+            INSERT INTO cargo_bookings (
+                cargo_id, schedule_id, user_id, 
+                booking_date, booking_status, payment_status,
+                price, notes
+            ) VALUES (
+                p_cargo_id, p_schedule_id, p_user_id, 
+                NOW(), 'confirmed', 'paid',
+                total_price, p_notes
+            );
+                
+            SET p_booking_id = LAST_INSERT_ID();
+                
+            -- Update cargo status (trigger handles this but keeping for clarity)
+            UPDATE cargo 
+            SET status = 'booked'
+            WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+                
+            -- Update schedule available capacity
+            UPDATE schedules
+            SET max_cargo = max_cargo - cargo_weight
+            WHERE schedule_id = p_schedule_id;
+                
+            SET p_success = TRUE;
+            SET p_message = CONCAT('Cargo booked successfully! Booking ID: ', p_booking_id);
+            COMMIT;
+        END IF;
+    END IF;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_direct_booking_details(
+    IN p_schedule_id INT,
+    IN p_cargo_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    -- Get schedule details
+    SELECT 
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        r.cost_per_kg,
+        r.distance,
+        ST_Y(op.location) AS origin_lat, 
+        ST_X(op.location) AS origin_lng,
+        ST_Y(dp.location) AS destination_lat, 
+        ST_X(dp.location) AS destination_lng
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        s.schedule_id = p_schedule_id;
+    
+    -- Get cargo details
+    SELECT 
+        cargo_id, description, cargo_type, weight, dimensions
+    FROM 
+        cargo
+    WHERE 
+        cargo_id = p_cargo_id AND user_id = p_user_id;
+    
+    -- Get username
+    SELECT username FROM users WHERE user_id = p_user_id;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE create_connected_booking(
+    IN p_cargo_id INT,
+    IN p_user_id INT,
+    IN p_schedule_ids VARCHAR(255),
+    IN p_notes TEXT,
+    OUT p_booking_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE origin_port_id INT;
+    DECLARE destination_port_id INT;
+    DECLARE total_price DECIMAL(12, 2);
+    DECLARE cargo_weight DECIMAL(10, 2);
+    DECLARE first_schedule_id INT;
+    DECLARE last_schedule_id INT;
+    DECLARE done INT DEFAULT 0;
+    DECLARE segment_count INT DEFAULT 0;
+    DECLARE current_schedule_id INT;
+    DECLARE segment_price DECIMAL(12, 2);
+    
+    -- Create a temporary table to store schedule IDs
+    DROP TEMPORARY TABLE IF EXISTS temp_schedule_ids;
+    CREATE TEMPORARY TABLE temp_schedule_ids (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        schedule_id INT NOT NULL
+    );
+    
+    -- Insert schedule IDs into temporary table
+    SET @sql = CONCAT("INSERT INTO temp_schedule_ids (schedule_id) VALUES ('", 
+                REPLACE(p_schedule_ids, ",", "'),('"), "')");
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    
+    -- Get first and last schedule IDs
+    SELECT schedule_id INTO first_schedule_id FROM temp_schedule_ids ORDER BY id LIMIT 1;
+    SELECT schedule_id INTO last_schedule_id FROM temp_schedule_ids ORDER BY id DESC LIMIT 1;
+    
+    -- Get total count of segments
+    SELECT COUNT(*) INTO segment_count FROM temp_schedule_ids;
+    
+    -- Start transaction
+    START TRANSACTION;
+    
+    -- Get origin and destination port IDs
+    SELECT 
+        r1.origin_port_id, r2.destination_port_id 
+    INTO 
+        origin_port_id, destination_port_id
+    FROM 
+        schedules s1
+    JOIN 
+        routes r1 ON s1.route_id = r1.route_id
+    JOIN 
+        schedules s2
+    JOIN 
+        routes r2 ON s2.route_id = r2.route_id
+    WHERE 
+        s1.schedule_id = first_schedule_id
+        AND s2.schedule_id = last_schedule_id;
+    
+    -- Get cargo weight
+    SELECT weight INTO cargo_weight FROM cargo WHERE cargo_id = p_cargo_id;
+    
+    -- Calculate total price by summing segment prices
+    SELECT 
+        SUM(r.cost_per_kg * cargo_weight) INTO total_price
+    FROM 
+        temp_schedule_ids t
+    JOIN 
+        schedules s ON t.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id;
+    
+    IF origin_port_id IS NULL OR destination_port_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Could not determine route endpoints';
+        ROLLBACK;
+    ELSEIF total_price IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Could not calculate booking price';
+        ROLLBACK;
+    ELSE
+        -- Create the connected booking
+        INSERT INTO connected_bookings (
+            cargo_id, user_id, origin_port_id, destination_port_id,
+            booking_date, booking_status, payment_status, 
+            total_price, notes
+        ) VALUES (
+            p_cargo_id, p_user_id, origin_port_id, destination_port_id,
+            NOW(), 'confirmed', 'paid', 
+            total_price, p_notes
+        );
+        
+        SET p_booking_id = LAST_INSERT_ID();
+        
+        -- Add each segment to the connected_booking_segments table
+        -- Use cursor to iterate through temp_schedule_ids
+        BEGIN
+            DECLARE cur CURSOR FOR 
+                SELECT schedule_id FROM temp_schedule_ids ORDER BY id;
+            DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+            
+            OPEN cur;
+            
+            SET @segment_order = 0;
+            read_loop: LOOP
+                FETCH cur INTO current_schedule_id;
+                IF done THEN
+                    LEAVE read_loop;
+                END IF;
+                
+                SET @segment_order = @segment_order + 1;
+                
+                -- Calculate segment price
+                SELECT 
+                    r.cost_per_kg * cargo_weight INTO segment_price
+                FROM 
+                    schedules s
+                JOIN 
+                    routes r ON s.route_id = r.route_id
+                WHERE 
+                    s.schedule_id = current_schedule_id;
+                
+                -- Insert segment
+                INSERT INTO connected_booking_segments (
+                    connected_booking_id, schedule_id, segment_order, segment_price
+                ) VALUES (
+                    p_booking_id, current_schedule_id, @segment_order, segment_price
+                );
+                
+                -- Update schedule available capacity
+                UPDATE schedules
+                SET max_cargo = max_cargo - cargo_weight
+                WHERE schedule_id = current_schedule_id;
+            END LOOP;
+            
+            CLOSE cur;
+        END;
+        
+        -- Update cargo status (trigger handles this but keeping for clarity)
+        UPDATE cargo 
+        SET status = 'booked'
+        WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+        
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Connected route booked successfully! Booking ID: ', p_booking_id);
+        COMMIT;
+    END IF;
+    
+    -- Clean up
+    DROP TEMPORARY TABLE IF EXISTS temp_schedule_ids;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+
+drop PROCEDURE get_connected_booking_details//
+CREATE PROCEDURE get_connected_booking_details(
+    IN p_schedule_ids VARCHAR(255),
+    IN p_cargo_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    -- Create a temporary table to store schedule IDs
+    DROP TEMPORARY TABLE IF EXISTS temp_schedule_ids;
+    CREATE TEMPORARY TABLE temp_schedule_ids (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        schedule_id INT NOT NULL
+    );
+    
+    -- Insert schedule IDs into temporary table
+    SET @sql = CONCAT("INSERT INTO temp_schedule_ids (schedule_id) VALUES ('", 
+                REPLACE(p_schedule_ids, ",", "'),('"), "')");
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    
+    -- Get cargo details
+    SELECT 
+        cargo_id, description, cargo_type, weight, dimensions
+    FROM 
+        cargo
+    WHERE 
+        cargo_id = p_cargo_id AND user_id = p_user_id;
+    
+    -- Get segments data
+    SELECT
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        r.origin_port_id,
+        op.name AS origin_port,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        r.destination_port_id,
+        dp.name AS destination_port,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        s.departure_date,
+        s.arrival_date,
+        r.cost_per_kg,
+        r.distance,
+        t.id AS segment_order
+    FROM
+        temp_schedule_ids t
+    JOIN
+        schedules s ON t.schedule_id = s.schedule_id
+    JOIN
+        routes r ON s.route_id = r.route_id
+    JOIN
+        ships ON s.ship_id = ships.ship_id
+    JOIN
+        ports op ON r.origin_port_id = op.port_id
+    JOIN
+        ports dp ON r.destination_port_id = dp.port_id
+    ORDER BY
+        t.id;
+    
+    -- Get username
+    SELECT username FROM users WHERE user_id = p_user_id;
+    
+    -- Clean up
+    DROP TEMPORARY TABLE IF EXISTS temp_schedule_ids;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_user_bookings(
+    IN p_user_id INT
+)
+BEGIN
+    -- Get direct bookings
+    SELECT 
+        b.booking_id,
+        b.cargo_id,
+        c.description AS cargo_description,
+        b.schedule_id,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        b.booking_status,
+        b.payment_status,
+        b.price,
+        b.booking_date,
+        ships.name AS ship_name,
+        'direct' AS booking_type
+    FROM 
+        cargo_bookings b
+    JOIN 
+        cargo c ON b.cargo_id = c.cargo_id
+    JOIN 
+        schedules s ON b.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        b.user_id = p_user_id
+    ORDER BY 
+        b.booking_date DESC;
+    
+    -- Get connected bookings
+    SELECT 
+        cb.connected_booking_id AS booking_id,
+        cb.cargo_id,
+        c.description AS cargo_description,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        cb.booking_status,
+        cb.payment_status,
+        cb.total_price AS price,
+        cb.booking_date,
+        COUNT(cbs.segment_id) AS total_segments,
+        'connected' AS booking_type,
+        MIN(s.departure_date) AS first_departure,
+        MAX(s.arrival_date) AS last_arrival
+    FROM 
+        connected_bookings cb
+    JOIN 
+        cargo c ON cb.cargo_id = c.cargo_id
+    JOIN 
+        ports op ON cb.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON cb.destination_port_id = dp.port_id
+    JOIN 
+        connected_booking_segments cbs ON cb.connected_booking_id = cbs.connected_booking_id
+    JOIN
+        schedules s ON cbs.schedule_id = s.schedule_id
+    WHERE 
+        cb.user_id = p_user_id
+    GROUP BY 
+        cb.connected_booking_id, cb.cargo_id, c.description, op.name, dp.name,
+        cb.booking_status, cb.payment_status, cb.total_price, cb.booking_date
+    ORDER BY 
+        cb.booking_date DESC;
+    
+    -- Get username
+    SELECT username FROM users WHERE user_id = p_user_id;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE PROCEDURE get_direct_booking_by_id(
+    IN p_booking_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    -- Get direct booking details
+    SELECT 
+        b.booking_id,
+        b.cargo_id,
+        c.description AS cargo_description,
+        c.cargo_type,
+        c.weight AS cargo_weight,
+        c.dimensions AS cargo_dimensions,
+        b.schedule_id,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        dp.name AS destination_port,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        r.distance,
+        b.booking_status,
+        b.payment_status,
+        b.price,
+        b.booking_date,
+        b.notes,
+        ships.name AS ship_name,
+        ships.ship_type,
+        'direct' AS booking_type
+    FROM 
+        cargo_bookings b
+    JOIN 
+        cargo c ON b.cargo_id = c.cargo_id
+    JOIN 
+        schedules s ON b.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        b.booking_id = p_booking_id AND b.user_id = p_user_id;
+    
+    -- Get username
+    SELECT username FROM users WHERE user_id = p_user_id;
+END//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE get_connected_booking_by_id(
+    IN p_booking_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    -- Get connected booking details
+    SELECT 
+        cb.connected_booking_id,
+        cb.cargo_id,
+        c.description AS cargo_description,
+        c.cargo_type,
+        c.weight AS cargo_weight,
+        c.dimensions AS cargo_dimensions,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        cb.booking_status,
+        cb.payment_status,
+        cb.total_price,
+        cb.booking_date,
+        cb.notes,
+        'connected' AS booking_type
+    FROM 
+        connected_bookings cb
+    JOIN 
+        cargo c ON cb.cargo_id = c.cargo_id
+    JOIN 
+        ports op ON cb.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON cb.destination_port_id = dp.port_id
+    WHERE 
+        cb.connected_booking_id = p_booking_id AND cb.user_id = p_user_id;
+    
+    -- Get segment details for this connected booking
+    SELECT 
+        cbs.segment_id,
+        cbs.segment_order,
+        cbs.schedule_id,
+        cbs.segment_price,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        op.port_id AS origin_port_id,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        dp.name AS destination_port,
+        dp.port_id AS destination_port_id,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        r.distance,
+        ships.name AS ship_name,
+        ships.ship_type,
+        TIMESTAMPDIFF(HOUR, 
+            s.arrival_date, 
+            LEAD(s.departure_date) OVER (ORDER BY cbs.segment_order)
+        ) / 24 AS connection_time
+    FROM 
+        connected_booking_segments cbs
+    JOIN 
+        schedules s ON cbs.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        cbs.connected_booking_id = p_booking_id
+    ORDER BY 
+        cbs.segment_order;
+    
+    -- Get username
+    SELECT username FROM users WHERE user_id = p_user_id;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+
+
+CREATE PROCEDURE cancel_direct_booking(
+    IN p_booking_id INT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE cargo_id INT;
+    DECLARE schedule_id INT;
+    DECLARE cargo_weight DECIMAL(10, 2);
+    
+    START TRANSACTION;
+    
+    -- Get cargo ID and schedule ID for this booking
+    SELECT cb.cargo_id, cb.schedule_id 
+    INTO cargo_id, schedule_id
+    FROM cargo_bookings cb
+    WHERE cb.booking_id = p_booking_id AND cb.user_id = p_user_id
+    FOR UPDATE;
+    
+    IF cargo_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Booking not found or does not belong to you';
+        ROLLBACK;
+    ELSE
+        -- Get cargo weight to restore schedule capacity
+        SELECT weight INTO cargo_weight 
+        FROM cargo WHERE cargo_id = cargo_id;
+        
+        -- Update booking status
+        UPDATE cargo_bookings 
+        SET booking_status = 'cancelled', payment_status = 'refunded'
+        WHERE booking_id = p_booking_id AND user_id = p_user_id;
+        
+        -- Update cargo status back to pending
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = cargo_id;
+        
+        -- Restore schedule capacity
+        UPDATE schedules
+        SET max_cargo = max_cargo + cargo_weight
+        WHERE schedule_id = schedule_id;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Booking cancelled successfully. Your payment will be refunded.';
+        COMMIT;
+    END IF;
+END//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE cancel_connected_booking(
+    IN p_booking_id INT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE cargo_id INT;
+    DECLARE cargo_weight DECIMAL(10, 2);
+    
+    START TRANSACTION;
+    
+    -- Get cargo ID for this booking
+    SELECT cb.cargo_id 
+    INTO cargo_id
+    FROM connected_bookings cb
+    WHERE cb.connected_booking_id = p_booking_id AND cb.user_id = p_user_id
+    FOR UPDATE;
+    
+    IF cargo_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Booking not found or does not belong to you';
+        ROLLBACK;
+    ELSE
+        -- Get cargo weight to restore schedule capacity
+        SELECT weight INTO cargo_weight 
+        FROM cargo WHERE cargo_id = cargo_id;
+        
+        -- Update connected booking status
+        UPDATE connected_bookings 
+        SET booking_status = 'cancelled', payment_status = 'refunded'
+        WHERE connected_booking_id = p_booking_id AND user_id = p_user_id;
+        
+        -- Update cargo status back to pending
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = cargo_id;
+        
+        -- Restore schedule capacity for all segments
+        UPDATE schedules s
+        JOIN connected_booking_segments cbs ON s.schedule_id = cbs.schedule_id
+        SET s.max_cargo = s.max_cargo + cargo_weight
+        WHERE cbs.connected_booking_id = p_booking_id;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Connected booking cancelled successfully. Your payment will be refunded.';
+        COMMIT;
+    END IF;
+END//
+DELIMITER ;
+
+
+DELIMITER //
+
+CREATE PROCEDURE get_active_ports()
+BEGIN
+    SELECT port_id, name, country, ST_Y(location) as lat, ST_X(location) as lng
+    FROM ports 
+    WHERE status = 'active'
+    ORDER BY name;
+END//
+
+CREATE PROCEDURE get_user_cargo(IN p_user_id INT)
+BEGIN
+    SELECT cargo_id, description, cargo_type, weight, dimensions 
+    FROM cargo 
+    WHERE user_id = p_user_id
+    AND status IN ('pending', 'booked')
+    ORDER BY created_at DESC;
+END//
+
+CREATE PROCEDURE get_user_username(IN p_user_id INT)
+BEGIN
+    SELECT username FROM users WHERE user_id = p_user_id;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE get_route_segment_details(IN p_schedule_id INT)
+BEGIN
+    SELECT
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        r.origin_port_id,
+        op.name AS origin_port,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        r.destination_port_id,
+        dp.name AS destination_port,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        s.departure_date,
+        s.arrival_date,
+        TIMESTAMPDIFF(DAY, s.departure_date, s.arrival_date) AS duration
+    FROM
+        schedules s
+    JOIN
+        routes r ON s.route_id = r.route_id
+    JOIN
+        ships ON s.ship_id = ships.ship_id
+    JOIN
+        ports op ON r.origin_port_id = op.port_id
+    JOIN
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE
+        s.schedule_id = p_schedule_id;
+END//
+
+CREATE PROCEDURE get_connection_time(
+    IN p_first_schedule_id INT,
+    IN p_second_schedule_id INT
+)
+BEGIN
+    SELECT
+        TIMESTAMPDIFF(HOUR, s1.arrival_date, s2.departure_date) / 24.0
+    FROM
+        schedules s1, schedules s2
+    WHERE
+        s1.schedule_id = p_first_schedule_id AND s2.schedule_id = p_second_schedule_id;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE get_booking_price_info(
+    IN p_cargo_id INT,
+    IN p_schedule_id INT
+)
+BEGIN
+    SELECT 
+        r.cost_per_kg,
+        c.weight,
+        r.cost_per_kg * c.weight AS total_price
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        cargo c ON c.cargo_id = p_cargo_id
+    WHERE 
+        s.schedule_id = p_schedule_id;
+END//
+
+CREATE PROCEDURE get_schedule_details(IN p_schedule_id INT)
+BEGIN
+    SELECT 
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        r.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        r.cost_per_kg,
+        r.distance
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        s.schedule_id = p_schedule_id;
+END//
+
+CREATE PROCEDURE get_cargo_details(IN p_cargo_id INT, IN p_user_id INT)
+BEGIN
+    SELECT 
+        cargo_id, description, cargo_type, weight, dimensions
+    FROM 
+        cargo
+    WHERE 
+        cargo_id = p_cargo_id AND user_id = p_user_id;
+END//
+
+DELIMITER ;
+
+
+DELIMITER //
+
+CREATE PROCEDURE get_connected_route_endpoints(
+    IN p_first_schedule_id INT,
+    IN p_last_schedule_id INT
+)
+BEGIN
+    SELECT 
+        r1.origin_port_id AS origin_port_id,
+        r2.destination_port_id AS destination_port_id
+    FROM 
+        schedules s1
+    JOIN 
+        routes r1 ON s1.route_id = r1.route_id
+    JOIN 
+        schedules s2 ON s2.schedule_id = p_last_schedule_id
+    JOIN 
+        routes r2 ON s2.route_id = r2.route_id
+    WHERE 
+        s1.schedule_id = p_first_schedule_id;
+END//
+
+CREATE PROCEDURE calculate_connected_route_price(
+    IN p_schedule_ids TEXT,
+    IN p_cargo_id INT
+)
+BEGIN
+    SET @sql = CONCAT(
+        'SELECT 
+            SUM(r.cost_per_kg * c.weight) AS total_price,
+            c.weight
+        FROM 
+            cargo c
+        JOIN (
+            SELECT 
+                schedule_id, 
+                route_id
+            FROM 
+                schedules
+            WHERE 
+                schedule_id IN (', p_schedule_ids, ')
+        ) s ON 1=1
+        JOIN 
+            routes r ON s.route_id = r.route_id
+        WHERE 
+            c.cargo_id = ?
+        GROUP BY 
+            c.weight');
+            
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt USING p_cargo_id;
+END//
+
+
+
+CREATE PROCEDURE create_booking_segment(
+    IN p_connected_booking_id INT,
+    IN p_schedule_id INT,
+    IN p_segment_order INT,
+    IN p_cargo_weight DECIMAL(10,2)
+)
+BEGIN
+    DECLARE segment_price DECIMAL(12,2);
+    
+    -- Calculate segment price
+    SELECT 
+        r.cost_per_kg * p_cargo_weight INTO segment_price
+    FROM 
+        schedules s
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    WHERE 
+        s.schedule_id = p_schedule_id;
+    
+    -- Insert segment
+    INSERT INTO connected_booking_segments (
+        connected_booking_id, schedule_id, segment_order, segment_price
+    ) VALUES (
+        p_connected_booking_id, p_schedule_id, p_segment_order, segment_price
+    );
+    
+    -- Update schedule available capacity
+    UPDATE schedules
+    SET max_cargo = max_cargo - p_cargo_weight
+    WHERE schedule_id = p_schedule_id;
+END//
+
+CREATE PROCEDURE update_cargo_status(
+    IN p_cargo_id INT,
+    IN p_user_id INT,
+    IN p_status VARCHAR(50)
+)
+BEGIN
+    UPDATE cargo 
+    SET status = p_status
+    WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+END//
+
+DELIMITER ;
+
+--
+DELIMITER //
+
+CREATE PROCEDURE get_user_direct_bookings(IN p_user_id INT)
+BEGIN
+    SELECT 
+        b.booking_id,
+        b.cargo_id,
+        c.description AS cargo_description,
+        b.schedule_id,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        b.booking_status,
+        b.payment_status,
+        b.price,
+        b.booking_date,
+        ships.name AS ship_name
+    FROM 
+        cargo_bookings b
+    JOIN 
+        cargo c ON b.cargo_id = c.cargo_id
+    JOIN 
+        schedules s ON b.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        b.user_id = p_user_id
+    ORDER BY 
+        b.booking_date DESC;
+END//
+
+CREATE PROCEDURE get_user_connected_bookings(IN p_user_id INT)
+BEGIN
+    SELECT 
+        cb.connected_booking_id,
+        cb.cargo_id,
+        c.description AS cargo_description,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        cb.booking_status,
+        cb.payment_status,
+        cb.total_price,
+        cb.booking_date,
+        COUNT(cbs.segment_id) AS total_segments
+    FROM 
+        connected_bookings cb
+    JOIN 
+        cargo c ON cb.cargo_id = c.cargo_id
+    JOIN 
+        ports op ON cb.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON cb.destination_port_id = dp.port_id
+    JOIN 
+        connected_booking_segments cbs ON cb.connected_booking_id = cbs.connected_booking_id
+    WHERE 
+        cb.user_id = p_user_id
+    GROUP BY 
+        cb.connected_booking_id
+    ORDER BY 
+        cb.booking_date DESC;
+END//
+
+CREATE PROCEDURE get_connected_booking_dates(IN p_booking_id INT)
+BEGIN
+    SELECT 
+        MIN(s.departure_date) AS first_departure,
+        MAX(s.arrival_date) AS last_arrival
+    FROM 
+        connected_booking_segments cbs
+    JOIN 
+        schedules s ON cbs.schedule_id = s.schedule_id
+    WHERE 
+        cbs.connected_booking_id = p_booking_id;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE get_direct_booking_details(
+    IN p_booking_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        b.booking_id,
+        b.cargo_id,
+        c.description AS cargo_description,
+        c.cargo_type,
+        c.weight AS cargo_weight,
+        c.dimensions AS cargo_dimensions,
+        b.schedule_id,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        dp.name AS destination_port,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        r.distance,
+        b.booking_status,
+        b.payment_status,
+        b.price,
+        b.booking_date,
+        b.notes,
+        ships.name AS ship_name,
+        ships.ship_type
+    FROM 
+        cargo_bookings b
+    JOIN 
+        cargo c ON b.cargo_id = c.cargo_id
+    JOIN 
+        schedules s ON b.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        b.booking_id = p_booking_id AND b.user_id = p_user_id;
+END//
+
+
+
+CREATE PROCEDURE get_connected_booking_segments(
+    IN p_booking_id INT
+)
+BEGIN
+    SELECT 
+        cbs.segment_id,
+        cbs.segment_order,
+        cbs.schedule_id,
+        cbs.segment_price,
+        s.departure_date,
+        s.arrival_date,
+        r.name AS route_name,
+        op.name AS origin_port,
+        op.port_id AS origin_port_id,
+        ST_Y(op.location) AS origin_lat,
+        ST_X(op.location) AS origin_lng,
+        dp.name AS destination_port,
+        dp.port_id AS destination_port_id,
+        ST_Y(dp.location) AS destination_lat,
+        ST_X(dp.location) AS destination_lng,
+        r.distance,
+        ships.name AS ship_name,
+        ships.ship_type
+    FROM 
+        connected_booking_segments cbs
+    JOIN 
+        schedules s ON cbs.schedule_id = s.schedule_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    WHERE 
+        cbs.connected_booking_id = p_booking_id
+    ORDER BY 
+        cbs.segment_order;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE get_direct_booking_for_cancel(
+    IN p_booking_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    SELECT cargo_id, schedule_id, price
+    FROM cargo_bookings
+    WHERE booking_id = p_booking_id AND user_id = p_user_id;
+END//
+
+DELIMITER //
+CREATE PROCEDURE get_connected_booking_for_cancel(
+    IN p_booking_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    SELECT cb.cargo_id, cbs.schedule_id
+    FROM connected_bookings cb
+    JOIN connected_booking_segments cbs ON cb.connected_booking_id = cbs.connected_booking_id
+    WHERE cb.connected_booking_id = p_booking_id AND cb.user_id = p_user_id;
+END//
+
+
+
+CREATE PROCEDURE restore_schedule_capacity(
+    IN p_schedule_id INT,
+    IN p_cargo_weight DECIMAL(10,2)
+)
+BEGIN
+    UPDATE schedules
+    SET max_cargo = max_cargo + p_cargo_weight
+    WHERE schedule_id = p_schedule_id;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE get_cargo_details_api(
+    IN p_cargo_id INT,
+    IN p_user_id INT
+)
+BEGIN
+    SELECT cargo_id, description, cargo_type, weight, dimensions
+    FROM cargo
+    WHERE cargo_id = p_cargo_id AND user_id = p_user_id;
+END//
+
+DELIMITER ;
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS cancel_booking_direct //
+
+CREATE PROCEDURE cancel_booking_direct(
+    IN p_booking_id INT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_cargo_id INT;
+    DECLARE v_schedule_id INT;
+    DECLARE v_cargo_weight DECIMAL(10, 2);
+    
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_success = FALSE;
+        SET p_message = 'An error occurred while cancelling the booking';
+    END;
+    
+    START TRANSACTION;
+    
+    -- Get booking details
+    SELECT cargo_id, schedule_id INTO v_cargo_id, v_schedule_id
+    FROM cargo_bookings 
+    WHERE booking_id = p_booking_id AND user_id = p_user_id
+    LIMIT 1;
+    
+    IF v_cargo_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Booking not found or does not belong to you';
+        ROLLBACK;
+    ELSE
+        -- Get cargo weight
+        SELECT weight INTO v_cargo_weight
+        FROM cargo
+        WHERE cargo_id = v_cargo_id
+        LIMIT 1;
+        
+        -- Update booking status
+        UPDATE cargo_bookings 
+        SET booking_status = 'cancelled', payment_status = 'refunded'
+        WHERE booking_id = p_booking_id AND user_id = p_user_id;
+        
+        -- Update cargo status
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = v_cargo_id;
+        
+        -- Restore schedule capacity
+        UPDATE schedules
+        SET max_cargo = max_cargo + v_cargo_weight
+        WHERE schedule_id = v_schedule_id;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Booking cancelled successfully. Your payment will be refunded.';
+        COMMIT;
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS cancel_booking_connected //
+
+CREATE PROCEDURE cancel_booking_connected(
+    IN p_booking_id INT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_cargo_id INT;
+    DECLARE v_cargo_weight DECIMAL(10, 2);
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_schedule_id INT;
+    
+    -- Cursor for schedule IDs
+    DECLARE schedule_cursor CURSOR FOR
+        SELECT schedule_id
+        FROM connected_booking_segments
+        WHERE connected_booking_id = p_booking_id;
+    
+    -- Handler for when cursor reaches end
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Handler for SQL exceptions
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_success = FALSE;
+        SET p_message = 'An error occurred while cancelling the booking';
+    END;
+    
+    START TRANSACTION;
+    
+    -- Get booking details
+    SELECT cargo_id INTO v_cargo_id
+    FROM connected_bookings 
+    WHERE connected_booking_id = p_booking_id AND user_id = p_user_id
+    LIMIT 1;
+    
+    IF v_cargo_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Booking not found or does not belong to you';
+        ROLLBACK;
+    ELSE
+        -- Get cargo weight
+        SELECT weight INTO v_cargo_weight
+        FROM cargo
+        WHERE cargo_id = v_cargo_id
+        LIMIT 1;
+        
+        -- Update booking status
+        UPDATE connected_bookings 
+        SET booking_status = 'cancelled', payment_status = 'refunded'
+        WHERE connected_booking_id = p_booking_id AND user_id = p_user_id;
+        
+        -- Update cargo status
+        UPDATE cargo 
+        SET status = 'pending'
+        WHERE cargo_id = v_cargo_id;
+        
+        -- Restore schedule capacity for all segments
+        OPEN schedule_cursor;
+        
+        read_loop: LOOP
+            FETCH schedule_cursor INTO v_schedule_id;
+            IF done THEN
+                LEAVE read_loop;
+            END IF;
+            
+            UPDATE schedules
+            SET max_cargo = max_cargo + v_cargo_weight
+            WHERE schedule_id = v_schedule_id;
+        END LOOP;
+        
+        CLOSE schedule_cursor;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Connected booking cancelled successfully. Your payment will be refunded.';
+        COMMIT;
+    END IF;
+END//
+
+DELIMITER ;
