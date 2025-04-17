@@ -95,7 +95,6 @@
       document.body.classList.toggle('sidebar-open');
     });
 
-    // Close sidebar when clicking outside
     document.addEventListener('click', function (event) {
       const isClickInsideSidebar = sidebar.contains(event.target);
       const isClickOnToggle = toggle.contains(event.target);

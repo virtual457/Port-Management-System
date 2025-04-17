@@ -94,14 +94,13 @@ def manage_schedules(request):
         query_params.append(f"%{berth_number}%")
         query_params.append(f"%{berth_number}%")
     
-    # Add filter clauses to query
     if filter_clauses:
         base_query += " AND " + " AND ".join(filter_clauses)
     
-    # Add order by clause
+
     base_query += " ORDER BY s.departure_date DESC"
     
-    # Execute query
+
     with connection.cursor() as cursor:
         cursor.execute(base_query, query_params)
         
@@ -123,8 +122,7 @@ def manage_schedules(request):
         delayed_count = status_counts.get('delayed', 0)
         cancelled_count = status_counts.get('cancelled', 0)
         issues_count = delayed_count + cancelled_count
-    
-    # Pagination
+
     page = request.GET.get('page', 1)
     paginator = Paginator(schedules_data, 10)
     schedules = paginator.get_page(page)
@@ -157,13 +155,12 @@ def update_schedule_status(request):
     
     try:
         with connection.cursor() as cursor:
-            # Update schedule status
+
             cursor.execute("""
                 UPDATE schedules SET status = %s 
                 WHERE schedule_id = %s
             """, [new_status, schedule_id])
-            
-            # Check if status_logs table exists
+
             cursor.execute("""
                 SELECT COUNT(*) 
                 FROM information_schema.tables 
@@ -172,7 +169,6 @@ def update_schedule_status(request):
             """)
             logs_table_exists = cursor.fetchone()[0] > 0
             
-            # Log the status change if table exists
             if logs_table_exists:
                 cursor.execute("""
                     INSERT INTO schedule_status_logs 
@@ -272,8 +268,7 @@ def delete_schedule(request):
                 return redirect('manage-schedules')
             
             ship_id, status, origin_berth_id, destination_berth_id = result
-            
-            # Free up reserved berths if not already completed
+
             if status != 'completed':
                 if origin_berth_id:
                     cursor.execute("""
@@ -289,7 +284,6 @@ def delete_schedule(request):
                         WHERE berth_id = %s AND status IN ('reserved', 'occupied')
                     """, [destination_berth_id])
             
-            # Delete the schedule
             cursor.execute("DELETE FROM schedules WHERE schedule_id = %s", [schedule_id])
             
         messages.success(request, "Schedule deleted successfully")

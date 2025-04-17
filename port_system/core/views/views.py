@@ -19,7 +19,6 @@ def login_view(request):
             if user and check_password(password, user[1]):
                 request.session['user_id'] = user[0]
 
-                # Check how many roles user has
                 cursor.execute("SELECT r.role_name FROM user_roles ur JOIN roles r ON ur.role_id = r.role_id WHERE ur.user_id = %s", [user[0]])
                 roles = [row[0] for row in cursor.fetchall()]
 
@@ -52,13 +51,11 @@ def signup_view(request):
             if user_exists:
                 return render(request, 'signup.html', {'error': 'Email already registered'})
 
-            # Insert user
             cursor.execute("INSERT INTO users (username, first_name, last_name, phone_number, email, password) VALUES (%s, %s, %s, %s, %s, %s)",
                 [username, first_name, last_name, phone_number, email, hashed_password])   
             user_id = cursor.lastrowid
 
 
-            # Assign default role (customer)
             cursor.execute("SELECT role_id FROM roles WHERE role_name = 'customer'")
             role_id = cursor.fetchone()[0]
             cursor.execute("INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)", [user_id, role_id])
@@ -116,12 +113,11 @@ def logout_view(request):
 
 
 
-# Utility to check role
 def role_required(expected_role):
     def wrapper(view_func):
         def inner(request, *args, **kwargs):
             if request.session.get('selected_role') != expected_role:
-                return redirect('login')  # or a 403 page
+                return redirect('login') 
             return view_func(request, *args, **kwargs)
         return inner
     return wrapper
@@ -143,16 +139,13 @@ def staff_dashboard(request):
 def customer_dashboard(request):
     user_id = request.session.get('user_id')
     
-    # Early return if not authenticated
     if not user_id:
         return redirect('login')
     
-    # Check if user has customer role selected
     selected_role = request.session.get('selected_role')
     if selected_role != 'customer':
-        return redirect('unauthorized')  # Or handle appropriately
+        return redirect('unauthorized')
     
-    # Get username from database
     with connection.cursor() as cursor:
         cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
         result = cursor.fetchone()
@@ -160,7 +153,6 @@ def customer_dashboard(request):
     
     print(user_id)
     print(username)
-    # Initialize dashboard data
     context = {
         'username': username,
         'cargo_count': 0,
@@ -173,39 +165,32 @@ def customer_dashboard(request):
     }
     
     with connection.cursor() as cursor:
-        # Get cargo statistics
         cursor.callproc('get_customer_dashboard_stats', [user_id])
         
-        # Process cargo count
         result = cursor.fetchone()
         if result:
             context['cargo_count'] = result[0]
         
-        # Process direct active bookings
         cursor.nextset()
         result = cursor.fetchone()
         direct_bookings = result[0] if result else 0
         
-        # Process connected active bookings
         cursor.nextset()
         result = cursor.fetchone()
         connected_bookings = result[0] if result else 0
         
         context['active_bookings'] = direct_bookings + connected_bookings
         
-        # Process in-transit shipments
         cursor.nextset()
         result = cursor.fetchone()
         if result:
             context['in_transit'] = result[0]
         
-        # Process completed shipments
         cursor.nextset()
         result = cursor.fetchone()
         if result:
             context['completed_shipments'] = result[0]
         
-        # Get recent bookings (limit to 5)
         cursor.callproc('get_customer_recent_bookings', [user_id, 5])
         recent_bookings = []
         for row in cursor.fetchall():
@@ -223,8 +208,7 @@ def customer_dashboard(request):
             })
         context['recent_bookings'] = recent_bookings
         
-        # Get upcoming shipments (limit to 3)
-        cursor.nextset()  # Move to next result set if needed
+        cursor.nextset() 
         cursor.callproc('get_customer_upcoming_shipments', [user_id, 3])
         upcoming_shipments = []
         for row in cursor.fetchall():
@@ -237,8 +221,7 @@ def customer_dashboard(request):
             })
         context['upcoming_shipments'] = upcoming_shipments
         
-        # Get popular shipping routes (limit to 5)
-        cursor.nextset()  # Move to next result set if needed
+        cursor.nextset()
         cursor.callproc('get_popular_shipping_routes', [5])
         popular_routes = []
         for row in cursor.fetchall():
@@ -250,14 +233,13 @@ def customer_dashboard(request):
                 'destination_port': row[4],
                 'duration': row[5],
                 'available_ships': row[6],
-                'avg_cost_per_kg': round(float(row[7]), 2)  # Format as 2 decimal places
+                'avg_cost_per_kg': round(float(row[7]), 2)
             })
         context['popular_routes'] = popular_routes
     print(context)
     return render(request, 'customer_dashboard.html', context)
 
 
-#can be optimized using a limit and offset for pagination in the stored procedure.
 @role_required('admin')
 def admin_manage_users(request):
     username = request.GET.get('username', '').strip() or None
@@ -266,11 +248,8 @@ def admin_manage_users(request):
     page_number = request.GET.get('page', 1)
 
     with connection.cursor() as cursor:
-        # Call the stored procedure to get all filtered users
         cursor.callproc('filter_users_advanced', [username, email, role])
         users_raw = cursor.fetchall()
-
-    # Prepare user list with role split into a list
     users_list = []
     for row in users_raw:
         role_list = row[3].split(', ') if row[3] else []
@@ -278,15 +257,13 @@ def admin_manage_users(request):
             'user_id': row[0], 
             'username': row[1], 
             'email': row[2], 
-            'role': row[3],  # Keep the original role string
-            'role_list': role_list  # Add the split list
+            'role': row[3], 
+            'role_list': role_list 
         })
 
-    # Apply pagination in Python
-    paginator = Paginator(users_list, 5)  # Show 5 users per page
+    paginator = Paginator(users_list, 5) 
     users_page = paginator.get_page(page_number)
 
-    # Get all available roles from the database
     with connection.cursor() as cursor:
         cursor.execute("SELECT role_id, role_name FROM roles ORDER BY role_name")
         roles_raw = cursor.fetchall()
@@ -325,39 +302,32 @@ def admin_users_add(request):
             messages.error(request, "Required fields are missing.")
             return redirect('manage-users')
         
-        # Hash the password
         hashed_password = make_password(password)
         print("hashed password")
         
         try:
             with connection.cursor() as cursor:
-                # Check if email already exists
                 cursor.execute("SELECT user_id FROM users WHERE email = %s", [email])
                 if cursor.fetchone():
                     messages.error(request, f"Email '{email}' is already in use.")
                     return redirect('manage-users')
                 
-                # Insert user
                 cursor.execute("""
                     INSERT INTO users (username, email, password, first_name, last_name, phone_number)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, [username, email, hashed_password, first_name, last_name, phone_number])
                 print("User inserted into database successfully")
-                # Get the user_id of the newly inserted user
                 user_id = cursor.lastrowid
                 
-                # Get role_id
                 cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
                 role_id_result = cursor.fetchone()
                 
                 if not role_id_result:
-                    # If role doesn't exist, create it (fallback, should rarely happen)
                     print("Error: Role not found")
                     Exception(f"Role '{role}' does not exist in the database.")    
                 else:
                     role_id = role_id_result[0]
                 
-                # Assign role to user
                 cursor.execute(
                     "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
                     [user_id, role_id]
@@ -370,7 +340,6 @@ def admin_users_add(request):
         
         return redirect('manage-users')
     
-    # If not POST, redirect back to manage users page
     return redirect('manage-users')
 
 @role_required('admin')
@@ -379,7 +348,7 @@ def admin_users_edit(request):
         user_id = request.POST.get('id')
         username = request.POST.get('username')
         email = request.POST.get('email')
-        roles = request.POST.getlist('roles[]')  # Get all selected roles
+        roles = request.POST.getlist('roles[]')
         password = request.POST.get('password')
         
         if not (user_id and username and email):
@@ -392,7 +361,6 @@ def admin_users_edit(request):
         
         try:
             with connection.cursor() as cursor:
-                # Check if email already exists for another user
                 cursor.execute(
                     "SELECT user_id FROM users WHERE email = %s AND user_id != %s", 
                     [email, user_id]
@@ -401,25 +369,20 @@ def admin_users_edit(request):
                     messages.error(request, f"Email '{email}' is already in use by another user.")
                     return redirect('manage-users')
                 
-                # Update user information
                 if password and password.strip():
-                    # If a new password is provided, hash it and update all fields
                     hashed_password = make_password(password)
                     cursor.execute(
                         "UPDATE users SET username = %s, email = %s, password = %s WHERE user_id = %s",
                         [username, email, hashed_password, user_id]
                     )
                 else:
-                    # Otherwise, update only username and email
                     cursor.execute(
                         "UPDATE users SET username = %s, email = %s WHERE user_id = %s",
                         [username, email, user_id]
                     )
                 
-                # Delete existing roles for this user
                 cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
                 
-                # Add each selected role
                 for role in roles:
                     cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
                     role_id_result = cursor.fetchone()
@@ -437,7 +400,6 @@ def admin_users_edit(request):
         
         return redirect('manage-users')
     
-    # If not POST, redirect back to manage users page
     return redirect('manage-users')
 
 @role_required('admin')
@@ -453,27 +415,20 @@ def admin_users_delete(request):
             messages.error(request, "No user specified.")
             return redirect('manage-users')
         
-        # Get username for success message
         with connection.cursor() as cursor:
             cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
             result = cursor.fetchone()
             username = result[0] if result else "Unknown user"
         
-        # Don't allow deletion of the current user
         if int(user_id) == int(request.session.get('user_id', 0)):
             messages.error(request, "You cannot delete your own account.")
             return redirect('manage-users')
         
         try:
             with connection.cursor() as cursor:
-                # Check if user has any associated data before deletion
-                # This would be more comprehensive in a real application
-                # checking all related tables
-                
-                # First delete from user_roles
+               
                 cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
                 
-                # Then delete the user
                 cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id])
                 
             messages.success(request, f"User '{username}' deleted successfully!")
@@ -482,9 +437,8 @@ def admin_users_delete(request):
         
         return redirect('manage-users')
     
-    # If not POST, redirect back to manage users page
     return redirect('manage-users')
-# Admin port management views
+
 
 
 @role_required('admin')
@@ -536,7 +490,7 @@ def admin_ports_add(request):
         name = request.POST.get('name')
         country = request.POST.get('country')
         lat, lng = request.POST.get('location').split(',')
-        location_point = f"POINT({lng} {lat})"  # Note: lng first, then lat (MySQL syntax)
+        location_point = f"POINT({lng} {lat})"
 
         status = request.POST.get('status')
 
@@ -553,7 +507,7 @@ def admin_ports_add(request):
 
 
         messages.success(request, f"Port '{name}' added successfully!")
-        return redirect('manage-ports')  # Update this URL name based on your routes
+        return redirect('manage-ports') 
 
     return render(request, 'add_ports.html')
 
@@ -570,11 +524,10 @@ def admin_ports_edit(request):
             messages.error(request, "All fields are required.")
             return redirect('manage-ports')
         
-        # Parse location
+
         lat, lng = location.split(',')
-        location_point = f"POINT({lng} {lat})"  # Note: lng first, then lat (MySQL syntax)
-        
-        # Update port in database
+        location_point = f"POINT({lng} {lat})"  
+
         with connection.cursor() as cursor:
             cursor.execute("""
                 UPDATE ports 
@@ -585,7 +538,6 @@ def admin_ports_edit(request):
         messages.success(request, f"Port '{name}' updated successfully!")
         return redirect('manage-ports')
     
-    # If not POST, redirect back to manage ports page
     return redirect('manage-ports')
 
 @role_required('admin')
@@ -597,11 +549,9 @@ def admin_ports_delete(request):
             messages.error(request, "No port specified.")
             return redirect('manage-ports')
         
-        # Use the stored procedure to safely delete the port
         try:
             with connection.cursor() as cursor:
                 cursor.callproc('delete_port', [port_id, 0, ''])
-                # Get the OUT parameters (status and message)
                 cursor.execute('SELECT @_delete_port_1, @_delete_port_2')
                 status, message = cursor.fetchone()
                 
@@ -615,11 +565,9 @@ def admin_ports_delete(request):
         
         return redirect('manage-ports')
     
-    # If not POST, redirect back to manage ports page
     return redirect('manage-ports')
 
 
-#Customer specific view to cargo
 from django.shortcuts import render, redirect
 from django.db import connection
 from django.core.paginator import Paginator
@@ -627,8 +575,8 @@ from django.contrib import messages
 from django.http import JsonResponse
 import json
 
-# Import your role_required decorator
-from .views import role_required  # Adjust the import path as needed
+
+from .views import role_required
 
 
 @role_required('customer')
@@ -637,21 +585,18 @@ def customer_manage_cargo(request):
     View function for managing customer cargo.
     Uses stored procedure to filter and retrieve cargo items.
     """
-    # Get filter parameters from request
     description = request.GET.get('description', '').strip() or None
     cargo_type = request.GET.get('type', '').strip() or None
     status = request.GET.get('status', '').strip() or None
     page_number = request.GET.get('page', 1)
-    
-    # Get user_id from session
+
     user_id = request.session.get('user_id')
     
     with connection.cursor() as cursor:
-        # Call the stored procedure to get filtered cargo items
         cursor.callproc('get_customer_cargo', [user_id, description, cargo_type, status])
         cargo_raw = cursor.fetchall()
     
-    # Transform raw data to dictionary list
+
     cargos_list = [
         {
             'id': row[0],
@@ -666,11 +611,9 @@ def customer_manage_cargo(request):
         for row in cargo_raw
     ]
     
-    # Apply pagination
-    paginator = Paginator(cargos_list, 5)  # Show 5 cargo items per page
+    paginator = Paginator(cargos_list, 5)
     cargos_page = paginator.get_page(page_number)
     
-    # Get username for display in navbar
     with connection.cursor() as cursor:
         cursor.execute("SELECT get_username(%s)", [user_id])
         username = cursor.fetchone()[0]
@@ -690,22 +633,18 @@ def customer_add_cargo(request):
     Uses stored procedure to insert cargo.
     """
     if request.method == 'POST':
-        # Get form data
         description = request.POST.get('description')
         cargo_type = request.POST.get('type')
         weight = request.POST.get('weight')
         dimensions = request.POST.get('dimensions', '')
         special_instructions = request.POST.get('special_instructions', '')
         
-        # Get user_id from session
         user_id = request.session.get('user_id')
         
-        # Validate required fields
         if not (description and cargo_type and weight):
             messages.error(request, "Required fields are missing.")
             return redirect('customer-manage-cargo')
         
-        # Call stored procedure to add cargo
         with connection.cursor() as cursor:
             cursor.callproc('add_customer_cargo', [
                 user_id, 
@@ -715,13 +654,11 @@ def customer_add_cargo(request):
                 dimensions, 
                 special_instructions
             ])
-            # Get result - some DBs return status, others may not need this line
             result = cursor.fetchone() 
         
         messages.success(request, f"Cargo '{description}' added successfully!")
         return redirect('customer-manage-cargo')
     
-    # If not POST, redirect back to manage page
     return redirect('customer-manage-cargo')
 
 
@@ -732,7 +669,6 @@ def customer_edit_cargo(request):
     Uses stored procedure to update cargo.
     """
     if request.method == 'POST':
-        # Get form data
         cargo_id = request.POST.get('id')
         description = request.POST.get('description')
         cargo_type = request.POST.get('type')
@@ -740,15 +676,12 @@ def customer_edit_cargo(request):
         dimensions = request.POST.get('dimensions', '')
         special_instructions = request.POST.get('special_instructions', '')
         
-        # Get user_id from session
         user_id = request.session.get('user_id')
         
-        # Validate required fields
         if not (cargo_id and description and cargo_type and weight):
             messages.error(request, "Required fields are missing.")
             return redirect('customer-manage-cargo')
         
-        # Call stored procedure to update cargo
         with connection.cursor() as cursor:
             cursor.callproc('update_customer_cargo', [
                 cargo_id,
@@ -760,10 +693,7 @@ def customer_edit_cargo(request):
                 special_instructions
             ])
             
-            # Get result status from procedure
             result = cursor.fetchone()
-            
-            # Check if update was successful (procedure returns 1 for success, 0 for failure)
             if result and result[0] == 0:
                 messages.error(request, "Failed to update cargo. Either it doesn't exist or you don't have permission.")
                 return redirect('customer-manage-cargo')
@@ -771,7 +701,6 @@ def customer_edit_cargo(request):
         messages.success(request, f"Cargo '{description}' updated successfully!")
         return redirect('customer-manage-cargo')
     
-    # If not POST, redirect back to manage page
     return redirect('customer-manage-cargo')
 
 
@@ -789,14 +718,11 @@ def customer_delete_cargo(request):
             messages.error(request, "No cargo specified.")
             return redirect('customer-manage-cargo')
         
-        # Call stored procedure to delete cargo
         with connection.cursor() as cursor:
             cursor.callproc('delete_customer_cargo', [cargo_id, user_id])
             
-            # Get result status from procedure
             result = cursor.fetchone()
             
-            # Procedure returns status code and message
             if result:
                 status_code = result[0]
                 
@@ -809,5 +735,4 @@ def customer_delete_cargo(request):
         
         return redirect('customer-manage-cargo')
     
-    # If not POST, redirect back to manage page
     return redirect('customer-manage-cargo')

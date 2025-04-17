@@ -185,7 +185,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Shipowner Menu</h5>
     <hr class="bg-light">
@@ -197,7 +196,6 @@
     <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -211,7 +209,6 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -221,7 +218,6 @@
             </a>
         </div>
 
-        <!-- Statistics Cards -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card-counter primary">
@@ -253,7 +249,6 @@
             </div>
         </div>
 
-        <!-- Messages/Alerts section -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -263,7 +258,6 @@
             {% endfor %}
         {% endif %}
 
-        <!-- Filter Schedules -->
         <form method="get" class="mb-4 filter-form">
             <div class="card mb-3">
                 <div class="card-header bg-light">
@@ -325,7 +319,6 @@
             </div>
         </form>
 
-        <!-- Schedule Navigation Tabs -->
         <ul class="nav nav-pills mb-3" id="schedulesTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all-schedules" type="button" role="tab" aria-controls="all-schedules" aria-selected="true">All Schedules</button>
@@ -344,7 +337,6 @@
             </li>
         </ul>
 
-        <!-- Schedule Tab Content -->
         <div class="tab-content" id="schedulesTabContent">
             <div class="tab-pane fade show active" id="all-schedules" role="tabpanel" aria-labelledby="all-tab">
                 <div class="table-responsive">
@@ -469,11 +461,9 @@
                 </div>
             </div>
             
-            <!-- Other tabs have similar content structure, just filtered differently -->
             <div class="tab-pane fade" id="upcoming-schedules" role="tabpanel" aria-labelledby="upcoming-tab">
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
-                        <!-- Table headers same as above -->
                         <thead class="table-dark">
                             <tr>
                                 <th>Ship</th>
@@ -487,11 +477,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Filter to show only upcoming schedules -->
                             {% for schedule in schedules %}
                                 {% if schedule.status == 'scheduled' %}
                                     <tr>
-                                        <!-- Same row content as above -->
                                         <td>{{ schedule.ship_name }}</td>
                                         <td>{{ schedule.origin_port }} to {{ schedule.destination_port }}</td>
                                         <td>{{ schedule.departure_date }}</td>
@@ -542,7 +530,6 @@
             </div>
             
             <div class="tab-pane fade" id="in-progress-schedules" role="tabpanel" aria-labelledby="in-progress-tab">
-                <!-- Similar structure for in-progress schedules -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
@@ -611,7 +598,6 @@
             </div>
             
             <div class="tab-pane fade" id="completed-schedules" role="tabpanel" aria-labelledby="completed-tab">
-                <!-- Similar structure for completed schedules -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
@@ -678,7 +664,6 @@
             </div>
             
             <div class="tab-pane fade" id="issues-schedules" role="tabpanel" aria-labelledby="issues-tab">
-                <!-- Showing delayed or cancelled schedules -->
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
@@ -751,7 +736,6 @@
             </div>
         </div>
 
-        <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
@@ -778,7 +762,6 @@
     </div>
 </div>
 
-<!-- View Schedule Modal -->
 <div class="modal fade" id="viewScheduleModal" tabindex="-1" aria-labelledby="viewScheduleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -798,7 +781,6 @@
                     </div>
                 </div>
                 
-                <!-- Voyage Information -->
                 <div class="card mb-3">
                     <div class="card-header bg-primary text-white">
                         <h6 class="mb-0">Voyage Information</h6>
@@ -819,7 +801,6 @@
                     </div>
                 </div>
                 
-                <!-- Origin Berth Information -->
                 <div class="card mb-3">
                     <div class="card-header bg-success text-white">
                         <h6 class="mb-0">Origin Berth Booking</h6>
@@ -844,7 +825,6 @@
                     </div>
                 </div>
                 
-                <!-- Destination Berth Information -->
                 <div class="card mb-3">
                     <div class="card-header bg-info text-white">
                         <h6 class="mb-0">Destination Berth Booking</h6>
@@ -869,7 +849,6 @@
                     </div>
                 </div>
                 
-                <!-- Notes Section -->
                 <div class="card">
                     <div class="card-header bg-light">
                         <h6 class="mb-0">Notes</h6>
@@ -879,7 +858,6 @@
                     </div>
                 </div>
 
-                <!-- Timeline -->
                 <div class="card mt-3">
                     <div class="card-header bg-dark text-white">
                         <h6 class="mb-0">Schedule Timeline</h6>
@@ -928,7 +906,6 @@
     </div>
 </div>
 
-<!-- Edit Schedule Modal (simplified for demo) -->
 <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-labelledby="editScheduleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -941,7 +918,6 @@
                     {% csrf_token %}
                     <input type="hidden" id="editScheduleId" name="id">
                     
-                    <!-- This would have fields similar to the create schedule form -->
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle me-2"></i> This modal would contain a full edit form with all schedule fields.
                     </div>
@@ -955,7 +931,6 @@
     </div>
 </div>
 
-<!-- Update Status Modal -->
 <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -1003,7 +978,6 @@
     </div>
 </div>
 
-<!-- Delete Schedule Modal -->
 <div class="modal fade" id="deleteScheduleModal" tabindex="-1" aria-labelledby="deleteScheduleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -1028,7 +1002,6 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -1044,9 +1017,7 @@
         }
     });
 
-    // Initialize datetime pickers
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize flatpickr for all date inputs
         const datePickers = document.querySelectorAll('.date-picker');
         datePickers.forEach(picker => {
             flatpickr(picker, {
@@ -1055,13 +1026,11 @@
             });
         });
         
-        // View Schedule Modal functionality
         const viewScheduleModal = document.getElementById('viewScheduleModal');
         if (viewScheduleModal) {
             viewScheduleModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const shipName = button.getAttribute('data-ship-name');
                 const shipType = button.getAttribute('data-ship-type');
@@ -1074,7 +1043,6 @@
                 const maxCargo = button.getAttribute('data-max-cargo');
                 const notes = button.getAttribute('data-notes');
                 
-                // Berth information
                 const originBerth = button.getAttribute('data-origin-berth');
                 const originBerthType = button.getAttribute('data-origin-berth-type');
                 const originBerthStart = button.getAttribute('data-origin-berth-start');
@@ -1085,7 +1053,6 @@
                 const destinationBerthStart = button.getAttribute('data-destination-berth-start');
                 const destinationBerthEnd = button.getAttribute('data-destination-berth-end');
                 
-                // Update modal content
                 document.getElementById('viewShipName').textContent = shipName || 'Not specified';
                 document.getElementById('viewRouteName').textContent = routeName || `${origin} to ${destination}`;
                 document.getElementById('viewDeparture').textContent = departure || 'Not scheduled';
@@ -1093,7 +1060,6 @@
                 document.getElementById('viewOrigin').textContent = origin || 'Not specified';
                 document.getElementById('viewDestination').textContent = destination || 'Not specified';
                 
-                // Set cargo units based on ship type
                 let cargoUnit = '';
                 if (shipType === 'container') {
                     cargoUnit = 'TEU';
@@ -1106,7 +1072,6 @@
                 document.getElementById('viewMaxCargo').textContent = maxCargo || 'Not specified';
                 document.getElementById('viewCargoUnit').textContent = cargoUnit;
                 
-                // Status badge
                 const statusElement = document.getElementById('viewStatus');
                 let statusHtml = '';
                 
@@ -1132,11 +1097,9 @@
                 
                 statusElement.innerHTML = statusHtml;
                 
-                // Set berth information
                 document.getElementById('viewOriginBerth').textContent = originBerth || 'Not assigned';
                 document.getElementById('viewDestinationBerth').textContent = destinationBerth || 'Not assigned';
                 
-                // Berth types
                 const originBerthTypeElement = document.getElementById('viewOriginBerthType');
                 const destinationBerthTypeElement = document.getElementById('viewDestinationBerthType');
                 
@@ -1198,10 +1161,8 @@
                 document.getElementById('viewDestinationBerthStart').textContent = destinationBerthStart || 'Not scheduled';
                 document.getElementById('viewDestinationBerthEnd').textContent = destinationBerthEnd || 'Not scheduled';
                 
-                // Notes
                 document.getElementById('viewNotes').textContent = notes || 'No additional notes';
                 
-                // Set up timeline
                 document.getElementById('timelineOriginStartDate').textContent = originBerthStart || 'Not scheduled';
                 document.getElementById('timelineDepartureDate').textContent = departure || 'Not scheduled';
                 document.getElementById('timelineOriginEndDate').textContent = originBerthEnd || 'Not scheduled';
@@ -1213,18 +1174,14 @@
                 const now = new Date();
                 const timelineMarkers = document.querySelectorAll('.timeline-marker');
                 
-                // Reset all markers
                 timelineMarkers.forEach(marker => {
                     marker.classList.remove('current-status');
                 });
                 
-                // Set current status
                 if (status === 'completed') {
                     document.getElementById('timelineDestinationEnd').classList.add('current-status');
                 } else if (status === 'cancelled') {
-                    // No marker highlighted for cancelled
                 } else {
-                    // Determine where we are in the timeline
                     const oriStartDate = originBerthStart ? new Date(originBerthStart) : null;
                     const depDate = departure ? new Date(departure) : null;
                     const oriEndDate = originBerthEnd ? new Date(originBerthEnd) : null;
@@ -1247,38 +1204,31 @@
                     }
                 }
                 
-                // Set up edit button
                 const editFromViewBtn = document.getElementById('editFromViewBtn');
                 editFromViewBtn.setAttribute('data-id', id);
                 editFromViewBtn.onclick = function() {
                     document.getElementById('editScheduleId').value = id;
-                    // Hide the view modal
                     const viewModal = bootstrap.Modal.getInstance(viewScheduleModal);
                     viewModal.hide();
-                    // Show the edit modal
                     const editModal = new bootstrap.Modal(document.getElementById('editScheduleModal'));
                     editModal.show();
                 };
             });
         }
         
-        // Update Status Modal functionality
         const updateStatusModal = document.getElementById('updateStatusModal');
         if (updateStatusModal) {
             updateStatusModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const shipName = button.getAttribute('data-ship-name');
                 const currentStatus = button.getAttribute('data-current-status');
                 
-                // Update form fields
                 document.getElementById('updateStatusId').value = id;
                 document.getElementById('updateShipName').value = shipName;
                 document.getElementById('updateCurrentStatus').value = currentStatus;
                 
-                // Pre-select the current status in the dropdown
                 document.getElementById('updateNewStatus').value = currentStatus;
             });
         }
@@ -1299,7 +1249,6 @@
             });
         }
         
-        // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert:not(.filter-alert)');
             alerts.forEach(function(alert) {

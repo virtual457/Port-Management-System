@@ -134,7 +134,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -148,7 +147,6 @@
     <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -162,14 +160,12 @@
     </div>
 </nav>
 
-<!-- Main content -->
 <div class="main-content" id="main-content">
     <div class="container">
         <div class="welcome-message text-center">
             Welcome back, {{ username|default:"Captain" }}!
         </div>
         
-        <!-- Stats Row -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="stat-card text-primary">
@@ -202,7 +198,6 @@
         </div>
         
         <div class="row">
-            <!-- Quick Actions Column -->
             <div class="col-md-4 mb-4">
                 <h4 class="mb-3">Quick Actions</h4>
                 
@@ -248,7 +243,6 @@
                 </div>
             </div>
             
-            <!-- Recent Bookings Column -->
             <div class="col-md-5 mb-4">
                 <div class="dashboard-card h-100">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -318,7 +312,6 @@
                 </div>
             </div>
             
-            <!-- Upcoming Shipments Column -->
             <div class="col-md-3 mb-4">
                 <div class="dashboard-card h-100">
                     <h4 class="mb-3">Shipping Calendar</h4>
@@ -346,7 +339,6 @@
             </div>
         </div>
         
-        <!-- Available Shipping Routes Section -->
         <div class="row">
             <div class="col-12 mb-4">
                 <div class="dashboard-card">

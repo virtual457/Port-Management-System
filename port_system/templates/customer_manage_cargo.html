@@ -92,7 +92,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -106,7 +105,6 @@
     <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -120,12 +118,10 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <h3 class="mb-4 text-center">Manage Your Cargo</h3>
 
-        <!-- Filter Cargo -->
         <form method="get" class="mb-3">
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
@@ -158,7 +154,6 @@
 
         <hr class="my-4">
 
-        <!-- Cargo Table -->
         <div class="table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -265,7 +260,6 @@
             </table>
         </div>
 
-        <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
@@ -292,7 +286,6 @@
     </div>
 </div>
 
-<!-- Add Cargo Modal -->
 <div class="modal fade" id="addCargoModal" tabindex="-1" aria-labelledby="addCargoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -343,7 +336,6 @@
     </div>
 </div>
 
-<!-- View Cargo Modal -->
 <div class="modal fade" id="viewCargoModal" tabindex="-1" aria-labelledby="viewCargoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -396,7 +388,6 @@
     </div>
 </div>
 
-<!-- Edit Cargo Modal -->
 <div class="modal fade" id="editCargoModal" tabindex="-1" aria-labelledby="editCargoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -447,7 +438,6 @@
     </div>
 </div>
 
-<!-- Delete Cargo Modal -->
 <div class="modal fade" id="deleteCargoModal" tabindex="-1" aria-labelledby="deleteCargoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -472,7 +462,6 @@
 </div>
 
 <script>
-    // Sidebar toggle
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -488,14 +477,12 @@
         }
     });
 
-    // Handle View Cargo Details Modal
     document.addEventListener('DOMContentLoaded', function() {
         const viewCargoModal = document.getElementById('viewCargoModal');
         if (viewCargoModal) {
             viewCargoModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const description = button.getAttribute('data-description');
                 const type = button.getAttribute('data-type');
@@ -504,7 +491,6 @@
                 const specialInstructions = button.getAttribute('data-special-instructions');
                 const status = button.getAttribute('data-status');
                 
-                // Update modal content
                 document.getElementById('viewId').textContent = id;
                 document.getElementById('viewDescription').textContent = description;
                 document.getElementById('viewType').textContent = type.charAt(0).toUpperCase() + type.slice(1);
@@ -536,13 +522,11 @@
             });
         }
         
-        // Handle Edit Cargo Modal
         const editCargoModal = document.getElementById('editCargoModal');
         if (editCargoModal) {
             editCargoModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const description = button.getAttribute('data-description');
                 const type = button.getAttribute('data-type');
@@ -550,7 +534,6 @@
                 const dimensions = button.getAttribute('data-dimensions');
                 const specialInstructions = button.getAttribute('data-special-instructions');
                 
-                // Set form values
                 document.getElementById('editCargoId').value = id;
                 document.getElementById('editDescription').value = description;
                 document.getElementById('editType').value = type;
@@ -560,17 +543,14 @@
             });
         }
         
-        // Handle Delete Cargo Modal
         const deleteCargoModal = document.getElementById('deleteCargoModal');
         if (deleteCargoModal) {
             deleteCargoModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const description = button.getAttribute('data-description');
                 
-                // Set modal content
                 document.getElementById('deleteCargoId').value = id;
                 document.getElementById('deleteCargoName').textContent = description;
             });

@@ -89,7 +89,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Menu</h5>
     <hr class="bg-light">
@@ -100,7 +99,6 @@
     <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -114,12 +112,10 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <h3 class="mb-4 text-center">Manage Ports</h3>
 
-        <!-- Filter Ports -->
         <form method="get" class="mb-3">
             <div class="row g-2 align-items-end">
                 <div class="col-md-3">
@@ -144,7 +140,6 @@
 
         <hr class="my-4">
 
-        <!-- Messages/Alerts section -->
         {% if messages %}
     {% for message in messages %}
         <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
@@ -153,7 +148,6 @@
         </div>
     {% endfor %}
 {% endif %}
-        <!-- Port Table -->
         <div class="table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -176,7 +170,6 @@
                                     <span class="badge bg-secondary port-badge">Inactive</span>
                                 {% endif %}
                             </td>
-                            <!-- Add to the actions column in the ports table -->
 <td class="text-center">
     <button type="button"
         class="btn btn-outline-info btn-sm view-port-btn"
@@ -229,7 +222,6 @@
             </table>
         </div>
 
-        <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
@@ -256,7 +248,6 @@
     </div>
 </div>
 
-<!-- View Port Modal -->
 <div class="modal fade" id="viewPortModal" tabindex="-1" aria-labelledby="viewPortModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -299,7 +290,6 @@
     </div>
 </div>
 
-<!-- Edit Port Modal -->
 <div class="modal fade" id="editPortModal" tabindex="-1" aria-labelledby="editPortModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -343,7 +333,6 @@
     </div>
 </div>
 
-<!-- Delete Port Modal -->
 <div class="modal fade" id="deletePortModal" tabindex="-1" aria-labelledby="deletePortModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -368,7 +357,6 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -384,9 +372,7 @@
         }
     });
 
-    // Modal functionality for port management
     document.addEventListener('DOMContentLoaded', function() {
-        // Handle View Port Modal
         const viewPortModal = document.getElementById('viewPortModal');
         if (viewPortModal) {
             let viewMap;
@@ -394,7 +380,6 @@
             viewPortModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const name = button.getAttribute('data-name');
                 const country = button.getAttribute('data-country');
@@ -402,7 +387,6 @@
                 const lng = parseFloat(button.getAttribute('data-lng'));
                 const status = button.getAttribute('data-status');
                 
-                // Update modal content
                 document.getElementById('viewId').textContent = id;
                 document.getElementById('viewName').textContent = name;
                 document.getElementById('viewCountry').textContent = country;
@@ -423,7 +407,6 @@
                 
                 statusElement.innerHTML = statusHtml;
                 
-                // Initialize the map after a small delay to ensure the modal is visible
                 setTimeout(() => {
                     if(viewMap) {
                         viewMap.remove();
@@ -451,7 +434,6 @@
             });
         }
         
-        // Handle Edit Port Modal
         const editPortModal = document.getElementById('editPortModal');
         if (editPortModal) {
             let editMap, editMarker;
@@ -459,7 +441,6 @@
             editPortModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const name = button.getAttribute('data-name');
                 const country = button.getAttribute('data-country');
@@ -467,14 +448,12 @@
                 const lng = parseFloat(button.getAttribute('data-lng'));
                 const status = button.getAttribute('data-status');
                 
-                // Set form values
                 document.getElementById('editPortId').value = id;
                 document.getElementById('editName').value = name;
                 document.getElementById('editStatus').value = status;
                 document.getElementById('editCountry').value = country;
                 document.getElementById('editLocation').value = `${lat},${lng}`;
                 
-                // Initialize the map after a small delay
                 setTimeout(() => {
                     if(editMap) {
                         editMap.remove();
@@ -486,7 +465,6 @@
                     }).addTo(editMap);
                     editMarker = L.marker([lat, lng]).addTo(editMap);
                     
-                    // Allow updating the marker position by clicking on the map
                     editMap.on('click', function(e) {
                         const newLat = e.latlng.lat.toFixed(6);
                         const newLng = e.latlng.lng.toFixed(6);
@@ -498,7 +476,6 @@
                             editMarker = L.marker(e.latlng).addTo(editMap);
                         }
                         
-                        // Fetch country using reverse geocoding
                         fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${newLat}&lon=${newLng}`)
                             .then(response => response.json())
                             .then(data => {
@@ -526,23 +503,19 @@
             });
         }
         
-        // Handle Delete Port Modal
         const deletePortModal = document.getElementById('deletePortModal');
         if (deletePortModal) {
             deletePortModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const name = button.getAttribute('data-name');
                 
-                // Set modal content
                 document.getElementById('deletePortId').value = id;
                 document.getElementById('deletePortName').textContent = name;
             });
         }
         
-        // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(function(alert) {

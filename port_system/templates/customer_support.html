@@ -155,7 +155,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -166,7 +165,6 @@
     <a href="/customer/support" class="active"><i class="bi bi-life-preserver me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -180,7 +178,6 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="container">
         <div class="row mb-4">
@@ -367,7 +364,6 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -383,7 +379,6 @@
         }
     });
 
-    // FAQ toggle functionality
     function toggleFAQ(element) {
         const answer = element.nextElementSibling;
         const icon = element.querySelector('i');

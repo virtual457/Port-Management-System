@@ -90,7 +90,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Menu</h5>
     <hr class="bg-light">
@@ -101,7 +100,6 @@
     <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -115,12 +113,10 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <h3 class="mb-4 text-center">Manage Berths</h3>
 
-        <!-- Port Selector -->
         <div class="mb-4">
             <form method="get" class="d-flex align-items-center justify-content-between">
                 <div class="form-floating port-selector">
@@ -142,7 +138,6 @@
             </form>
         </div>
 
-        <!-- Messages/Alerts section -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -152,7 +147,6 @@
             {% endfor %}
         {% endif %}
 
-        <!-- Filter Berths (only shown when a port is selected) -->
         {% if selected_port %}
             <form method="get" class="mb-3">
                 <input type="hidden" name="port_id" value="{{ selected_port }}">
@@ -184,7 +178,6 @@
 
             <hr class="my-4">
 
-            <!-- Berths Table -->
             <div class="table-responsive">
                 <table class="table table-bordered table-striped">
                     <thead class="table-dark">
@@ -271,7 +264,6 @@
                 </table>
             </div>
 
-            <!-- Pagination -->
             {% if berths.has_other_pages %}
                 <div class="mt-4">
                     <nav>
@@ -305,7 +297,6 @@
     </div>
 </div>
 
-<!-- Add Berth Modal -->
 <div class="modal fade" id="addBerthModal" tabindex="-1" aria-labelledby="addBerthModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -366,7 +357,6 @@
     </div>
 </div>
 
-<!-- View Berth Modal -->
 <div class="modal fade" id="viewBerthModal" tabindex="-1" aria-labelledby="viewBerthModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -411,7 +401,6 @@
     </div>
 </div>
 
-<!-- Edit Berth Modal -->
 <div class="modal fade" id="editBerthModal" tabindex="-1" aria-labelledby="editBerthModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -471,7 +460,6 @@
     </div>
 </div>
 
-<!-- Delete Berth Modal -->
 <div class="modal fade" id="deleteBerthModal" tabindex="-1" aria-labelledby="deleteBerthModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -497,7 +485,6 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -513,15 +500,12 @@
         }
     });
 
-    // Modal functionality for berth management
     document.addEventListener('DOMContentLoaded', function() {
-        // Handle View Berth Modal
         const viewBerthModal = document.getElementById('viewBerthModal');
         if (viewBerthModal) {
             viewBerthModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const number = button.getAttribute('data-number');
                 const type = button.getAttribute('data-type');
@@ -530,7 +514,6 @@
                 const depth = button.getAttribute('data-depth');
                 const status = button.getAttribute('data-status');
                 
-                // Update modal content
                 document.getElementById('viewBerthId').textContent = id;
                 document.getElementById('viewBerthNumber').textContent = number;
                 
@@ -582,13 +565,11 @@
             });
         }
         
-        // Handle Edit Berth Modal
         const editBerthModal = document.getElementById('editBerthModal');
         if (editBerthModal) {
             editBerthModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const number = button.getAttribute('data-number');
                 const type = button.getAttribute('data-type');
@@ -597,7 +578,6 @@
                 const depth = button.getAttribute('data-depth');
                 const status = button.getAttribute('data-status');
                 
-                // Set form values
                 document.getElementById('editBerthId').value = id;
                 document.getElementById('editBerthNumber').value = number;
                 document.getElementById('editBerthType').value = type;
@@ -608,23 +588,19 @@
             });
         }
         
-        // Handle Delete Berth Modal
         const deleteBerthModal = document.getElementById('deleteBerthModal');
         if (deleteBerthModal) {
             deleteBerthModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const number = button.getAttribute('data-number');
                 
-                // Set modal content
                 document.getElementById('deleteBerthId').value = id;
                 document.getElementById('deleteBerthNumber').textContent = number;
             });
         }
         
-        // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert.alert-dismissible');
             alerts.forEach(function(alert) {

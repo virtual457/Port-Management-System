@@ -125,7 +125,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Menu</h5>
     <hr class="bg-light">
@@ -136,7 +135,6 @@
     <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -150,7 +148,6 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -165,14 +162,12 @@
             </div>
         </div>
         
-        <!-- Port Location Map -->
         <div id="portMap" class="port-map" 
              data-latitude="{{ port.latitude|default:0 }}" 
              data-longitude="{{ port.longitude|default:0 }}"
              data-port-name="{{ port.name|escapejs }}"
              data-port-country="{{ port.country|escapejs }}"></div>
         
-        <!-- Port Information -->
         <div class="port-info">
             <h4 class="section-heading">Port Information</h4>
             <div class="row">
@@ -209,11 +204,9 @@
             </div>
         </div>
         
-        <!-- Berth Stats -->
         <div class="berth-stats mb-4">
             <h4 class="section-heading">Berth Statistics</h4>
             <div class="row">
-                <!-- Berth Type Stats -->
                 <div class="col-md-7">
                     <h5 class="mb-3">Berth Types</h5>
                     <div class="row">
@@ -279,7 +272,6 @@
                     </div>
                 </div>
                 
-                <!-- Berth Status Stats -->
                 <div class="col-md-5">
                     <h5 class="mb-3">Berth Status</h5>
                     <div class="row">
@@ -327,7 +319,6 @@
             </div>
         </div>
         
-        <!-- Berths Section -->
         <div class="berths-section">
             <h4 class="section-heading">
                 Berths
@@ -337,7 +328,6 @@
             </h4>
             
             {% if berths %}
-                <!-- Berth Type Filter Tabs -->
                 <ul class="nav nav-pills mb-3" id="berthTypeTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="all-berths-tab" data-bs-toggle="pill" data-bs-target="#all-berths" type="button" role="tab" aria-controls="all-berths" aria-selected="true">All Berths</button>
@@ -369,9 +359,7 @@
                     {% endif %}
                 </ul>
                 
-                <!-- Berth Cards by Type -->
                 <div class="tab-content" id="berthTabContent">
-                    <!-- All Berths -->
                     <div class="tab-pane fade show active" id="all-berths" role="tabpanel" aria-labelledby="all-berths-tab">
                         <div class="row">
                             {% for berth in berths %}
@@ -413,7 +401,6 @@
                         </div>
                     </div>
                     
-                    <!-- Container Berths -->
                     {% if has_container_berths %}
                     <div class="tab-pane fade" id="container-berths" role="tabpanel" aria-labelledby="container-berths-tab">
                         <div class="row">
@@ -449,13 +436,11 @@
                     </div>
                     {% endif %}
                     
-                    <!-- Similar tab panes for other berth types -->
                     {% if has_bulk_berths %}
                     <div class="tab-pane fade" id="bulk-berths" role="tabpanel" aria-labelledby="bulk-berths-tab">
                         <div class="row">
                             {% for berth in berths %}
                                 {% if berth.type == 'bulk' %}
-                                <!-- Similar card structure as container berths -->
                                 <div class="col-md-4 col-sm-6">
                                     <div class="card berth-card">
                                         <div class="card-body">
@@ -463,7 +448,6 @@
                                             <div class="card-text">
                                                 <div class="mb-2">
                                                     <span class="badge bg-secondary berth-badge">Bulk</span>
-                                                    <!-- Status badge -->
                                                     {% if berth.status == 'active' %}
                                                         <span class="badge bg-success berth-badge">Active</span>
                                                     {% elif berth.status == 'maintenance' %}
@@ -488,7 +472,6 @@
                     
                     {% if has_tanker_berths %}
                     <div class="tab-pane fade" id="tanker-berths" role="tabpanel" aria-labelledby="tanker-berths-tab">
-                        <!-- Similar structure -->
                         <div class="row">
                             {% for berth in berths %}
                                 {% if berth.type == 'tanker' %}
@@ -499,7 +482,6 @@
                                             <div class="card-text">
                                                 <div class="mb-2">
                                                     <span class="badge bg-info berth-badge">Tanker</span>
-                                                    <!-- Status badge -->
                                                     {% if berth.status == 'active' %}
                                                         <span class="badge bg-success berth-badge">Active</span>
                                                     {% elif berth.status == 'maintenance' %}
@@ -524,7 +506,6 @@
                     
                     {% if has_passenger_berths %}
                     <div class="tab-pane fade" id="passenger-berths" role="tabpanel" aria-labelledby="passenger-berths-tab">
-                        <!-- Similar structure -->
                         <div class="row">
                             {% for berth in berths %}
                                 {% if berth.type == 'passenger' %}
@@ -535,7 +516,6 @@
                                             <div class="card-text">
                                                 <div class="mb-2">
                                                     <span class="badge bg-success berth-badge">Passenger</span>
-                                                    <!-- Status badge -->
                                                     {% if berth.status == 'active' %}
                                                         <span class="badge bg-success berth-badge">Active</span>
                                                     {% elif berth.status == 'maintenance' %}
@@ -560,7 +540,6 @@
                     
                     {% if has_multipurpose_berths %}
                     <div class="tab-pane fade" id="multipurpose-berths" role="tabpanel" aria-labelledby="multipurpose-berths-tab">
-                        <!-- Similar structure -->
                         <div class="row">
                             {% for berth in berths %}
                                 {% if berth.type == 'multipurpose' %}
@@ -571,7 +550,6 @@
                                             <div class="card-text">
                                                 <div class="mb-2">
                                                     <span class="badge bg-warning text-dark berth-badge">Multipurpose</span>
-                                                    <!-- Status badge -->
                                                     {% if berth.status == 'active' %}
                                                         <span class="badge bg-success berth-badge">Active</span>
                                                     {% elif berth.status == 'maintenance' %}
@@ -604,7 +582,6 @@
     </div>
 </div>
 
-<!-- Berth Detail Modals -->
 {% for berth in berths %}
 <div class="modal fade" id="berthModal{{ berth.berth_id }}" tabindex="-1" aria-labelledby="berthModalLabel{{ berth.berth_id }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -685,7 +662,6 @@
 {% endfor %}
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -701,7 +677,6 @@
         }
     });
 
-    // Initialize the map
     document.addEventListener('DOMContentLoaded', function() {
         const mapElement = document.getElementById('portMap');
         const latitude = parseFloat(mapElement.dataset.latitude) || 0;
@@ -715,7 +690,6 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(portMap);
         
-        // Add a marker for the port
         L.marker([latitude, longitude])
             .addTo(portMap)
             .bindPopup('<strong>' + portName + '</strong><br>' + portCountry)

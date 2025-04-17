@@ -87,7 +87,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Menu</h5>
     <hr class="bg-light">
@@ -98,7 +97,6 @@
     <a href="/admin/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -112,7 +110,6 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <h3 class="mb-4 text-center">Manage Users</h3>
@@ -121,7 +118,6 @@
 
         <hr class="my-4">
 
-        <!-- Messages/Alerts section -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -131,7 +127,6 @@
             {% endfor %}
         {% endif %}
 
-        <!-- Filter Users -->
         <form method="get" class="mb-3">
             <div class="row g-2">
                 <div class="col-md-3">
@@ -160,7 +155,6 @@
             </div>
         </form>
 
-        <!-- User Table -->
         <div class="table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -233,7 +227,6 @@
             </table>
         </div>
 
-        <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
@@ -260,7 +253,6 @@
     </div>
 </div>
 
-<!-- Create User Modal -->
 <div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -328,7 +320,6 @@
     </div>
 </div>
 
-<!-- View User Modal -->
 <div class="modal fade" id="viewUserModal" tabindex="-1" aria-labelledby="viewUserModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -357,7 +348,6 @@
                         <div id="viewRoles"></div>
                     </div>
                 </div>
-                <!-- Additional user information could be added here -->
                 <div class="row">
                     <div class="col-12">
                         <h6>Account Status</h6>
@@ -372,7 +362,6 @@
     </div>
 </div>
 
-<!-- Edit User Modal -->
 <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -421,7 +410,6 @@
     </div>
 </div>
 
-<!-- Delete User Modal -->
 <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -446,7 +434,6 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -462,9 +449,7 @@
         }
     });
 
-    // Modal functionality for user management
     document.addEventListener('DOMContentLoaded', function() {
-        // Handle Create User Modal
         const createUserModal = document.getElementById('createUserModal');
         if (createUserModal) {
             const createUserBtn = document.getElementById('createUserBtn');
@@ -473,13 +458,11 @@
             const createConfirmPassword = document.getElementById('createConfirmPassword');
             const passwordMismatch = document.getElementById('passwordMismatch');
 
-            // Reset form when modal is opened
             createUserModal.addEventListener('show.bs.modal', function() {
                 createUserForm.reset();
                 passwordMismatch.style.display = 'none';
             });
 
-            // Validate passwords on input
             createConfirmPassword.addEventListener('input', function() {
                 if (createPassword.value !== createConfirmPassword.value) {
                     passwordMismatch.style.display = 'block';
@@ -488,49 +471,38 @@
                 }
             });
 
-            // Form submission
             createUserBtn.addEventListener('click', function() {
-                // Check if passwords match
                 if (createPassword.value !== createConfirmPassword.value) {
                     passwordMismatch.style.display = 'block';
                     return;
                 }
 
-                // Check if password meets minimum length
                 if (createPassword.value.length < 8) {
                     alert('Password must be at least 8 characters long');
                     return;
                 }
 
-                // Submit the form if validation passes
                 createUserForm.submit();
             });
         }
         
-        // Handle View User Modal
-        // Handle View User Modal
 const viewUserModal = document.getElementById('viewUserModal');
 if (viewUserModal) {
     viewUserModal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
         
-        // Extract data from button attributes
         const id = button.getAttribute('data-id');
         const username = button.getAttribute('data-username');
         const email = button.getAttribute('data-email');
         const roleString = button.getAttribute('data-role');
         const roles = roleString.split(', ');
         
-        // Update modal content
         document.getElementById('viewId').textContent = id;
         document.getElementById('viewUsername').textContent = username;
         document.getElementById('viewEmail').textContent = email;
-        
-        // Clear previous roles
         const rolesElement = document.getElementById('viewRoles');
         rolesElement.innerHTML = '';
         
-        // Add each role with appropriate badge
         roles.forEach(role => {
             let badgeClass = '';
             
@@ -559,37 +531,30 @@ if (viewUserModal) {
             roleBadge.textContent = role.trim().charAt(0).toUpperCase() + role.trim().slice(1);
             rolesElement.appendChild(roleBadge);
             
-            // Add a line break for better spacing between roles
             rolesElement.appendChild(document.createElement('br'));
         });
     });
 }
 
-        // Handle Edit User Modal
 const editUserModal = document.getElementById('editUserModal');
 if (editUserModal) {
     editUserModal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
         
-        // Extract data from button attributes
-        const id = button.getAttribute('data-id');
+        const id = buton.getAttribute('data-id');
         const username = button.getAttribute('data-username');
         const email = button.getAttribute('data-email');
         const roleString = button.getAttribute('data-role');
         const roles = roleString.split(', ');
         
-        // Set form values
         document.getElementById('editUserId').value = id;
         document.getElementById('editUsername').value = username;
         document.getElementById('editEmail').value = email;
-        document.getElementById('editPassword').value = ''; // Clear password field
+        document.getElementById('editPassword').value = ''; 
         
-        // Check the appropriate role checkboxes
         document.querySelectorAll('input[name="roles[]"]').forEach(checkbox => {
-            // Uncheck all checkboxes first
             checkbox.checked = false;
             
-            // Check the ones that match user's roles
             if (roles.some(role => role.trim() === checkbox.value)) {
                 checkbox.checked = true;
             }
@@ -598,23 +563,18 @@ if (editUserModal) {
 }
         
 
-        // Handle Delete User Modal
         const deleteUserModal = document.getElementById('deleteUserModal');
         if (deleteUserModal) {
             deleteUserModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const username = button.getAttribute('data-username');
-                
-                // Set modal content
                 document.getElementById('deleteUserId').value = id;
                 document.getElementById('deleteUserName').textContent = username;
             });
         }
         
-        // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(function(alert) {

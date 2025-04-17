@@ -94,7 +94,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Shipowner Menu</h5>
     <hr class="bg-light">
@@ -106,7 +105,6 @@
     <a href="/shipowner/reports"><i class="bi bi-graph-up me-2"></i> Reports</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -120,12 +118,10 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="dashboard-card">
         <h3 class="mb-4 text-center">Manage Routes</h3>
 
-        <!-- Filter and Create Route Button -->
         <form method="get" class="mb-3">
             <div class="row g-2">
                 <div class="col-md-3">
@@ -155,7 +151,6 @@
 
         <hr class="my-4">
 
-        <!-- Messages/Alerts section -->
         {% if messages %}
     {% for message in messages %}
         <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
@@ -165,7 +160,6 @@
     {% endfor %}
 {% endif %}
 
-        <!-- Routes Table -->
         <div class="table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
@@ -252,7 +246,6 @@ Edit
             </table>
         </div>
 
-        <!-- Pagination -->
         <div class="mt-4">
             <nav>
                 <ul class="pagination justify-content-center">
@@ -279,7 +272,6 @@ Edit
     </div>
 </div>
 
-<!-- Create Route Modal -->
 <div class="modal fade" id="createRouteModal" tabindex="-1" aria-labelledby="createRouteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -355,7 +347,6 @@ Edit
     </div>
 </div>
 
-<!-- View Route Modal -->
 <div class="modal fade" id="viewRouteModal" tabindex="-1" aria-labelledby="viewRouteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -409,7 +400,6 @@ Edit
     </div>
 </div>
 
-<!-- Edit Route Modal -->
 <div class="modal fade" id="editRouteModal" tabindex="-1" aria-labelledby="editRouteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -486,7 +476,6 @@ Edit
     </div>
 </div>
 
-<!-- Delete Route Modal -->
 <div class="modal fade" id="deleteRouteModal" tabindex="-1" aria-labelledby="deleteRouteModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -511,7 +500,6 @@ Edit
 </div>
 
 <script>
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
 
@@ -527,14 +515,12 @@ Edit
         }
     });
 
-    // Modal functionality for route management
     document.addEventListener('DOMContentLoaded', function() {
         let createMap, viewMap, editMap;
         let createOriginMarker, createDestinationMarker, createRouteLine;
         let viewOriginMarker, viewDestinationMarker, viewRouteLine;
         let editOriginMarker, editDestinationMarker, editRouteLine;
 
-        // Initialize create route map
         const createRouteModal = document.getElementById('createRouteModal');
         if (createRouteModal) {
             createRouteModal.addEventListener('shown.bs.modal', function() {
@@ -550,7 +536,6 @@ Edit
                 }, 200);
             });
 
-            // Handle origin port selection
             const createRouteOrigin = document.getElementById('createRouteOrigin');
             createRouteOrigin.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
@@ -570,7 +555,6 @@ Edit
                 updateMapBounds();
             });
 
-            // Handle destination port selection
             const createRouteDestination = document.getElementById('createRouteDestination');
             createRouteDestination.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
@@ -589,18 +573,15 @@ Edit
                 updateCreateRouteLine();
                 updateMapBounds();
                 
-                // Calculate distance if both markers are present
                 if (createOriginMarker && createDestinationMarker) {
                     const originLatLng = createOriginMarker.getLatLng();
                     const destLatLng = createDestinationMarker.getLatLng();
                     
-                    // Approximate nautical miles calculation (very rough)
                     const distanceKm = originLatLng.distanceTo(destLatLng) / 1000;
-                    const distanceNM = distanceKm * 0.539957; // Convert km to nautical miles
+                    const distanceNM = distanceKm * 0.539957;
                     
                     document.getElementById('createRouteDistance').value = distanceNM.toFixed(1);
                     
-                    // Estimate duration (assuming average speed of 15 knots)
                     const durationDays = distanceNM / (15 * 24);
                     document.getElementById('createRouteDuration').value = durationDays.toFixed(1);
                 }
@@ -643,13 +624,11 @@ Edit
             }
         }
 
-        // View Route Modal
         const viewRouteModal = document.getElementById('viewRouteModal');
         if (viewRouteModal) {
             viewRouteModal.addEventListener('show.bs.modal', function (event) {
     const button = event.relatedTarget;
     
-    // Extract data from button attributes
     const id = button.getAttribute('data-id');
     const name = button.getAttribute('data-name');
     const originName = button.getAttribute('data-origin-name');
@@ -663,7 +642,6 @@ Edit
     const status = button.getAttribute('data-status');
     const costPerKg = button.getAttribute('data-cost-per-kg') || '0.00';
     
-    // Update modal content
     document.getElementById('viewRouteName').textContent = name;
     document.getElementById('viewRouteOrigin').textContent = originName;
     document.getElementById('viewRouteDestination').textContent = destName;
@@ -690,7 +668,6 @@ Edit
                 
                 statusElement.innerHTML = statusHtml;
                 
-                // Initialize map after modal is shown
                 viewRouteModal.addEventListener('shown.bs.modal', function() {
                     if (viewMap) {
                         viewMap.remove();
@@ -701,7 +678,6 @@ Edit
                         attribution: '&copy; OpenStreetMap contributors'
                     }).addTo(viewMap);
                     
-                    // Add markers and polyline
                     viewOriginMarker = L.marker([originLat, originLng]).addTo(viewMap)
                         .bindPopup(`<strong>Origin:</strong> ${originName}`);
                     
@@ -715,7 +691,6 @@ Edit
                         dashArray: '10, 10'
                     }).addTo(viewMap);
                     
-                    // Fit map to markers
                     const bounds = L.latLngBounds([
                         [originLat, originLng],
                         [destLat, destLng]
@@ -739,13 +714,11 @@ Edit
             });
         }
         
-        // Edit Route Modal
         const editRouteModal = document.getElementById('editRouteModal');
         if (editRouteModal) {
             editRouteModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const name = button.getAttribute('data-name');
                 const originId = button.getAttribute('data-origin-id');
@@ -756,7 +729,6 @@ Edit
                 const costPerKg = button.getAttribute('data-cost-per-kg') || '0.00';
                 const shipId = button.getAttribute('data-ship-id') || '';
                 
-                // Set form values
                 document.getElementById('editRouteId').value = id;
                 document.getElementById('editRouteName').value = name;
                 document.getElementById('editRouteOrigin').value = originId;
@@ -766,7 +738,6 @@ Edit
                 document.getElementById('editRouteStatus').value = status;
                 document.getElementById('editRouteCostPerKg').value = costPerKg;
                 
-                // Initialize map after modal is shown
                 editRouteModal.addEventListener('shown.bs.modal', function() {
                     if (editMap) {
                         editMap.remove();
@@ -784,11 +755,9 @@ Edit
                     }, 200);
                 }, { once: true });
                 
-                // Handle origin change
                 const editRouteOrigin = document.getElementById('editRouteOrigin');
                 editRouteOrigin.addEventListener('change', updateEditMap);
                 
-                // Handle destination change
                 const editRouteDestination = document.getElementById('editRouteDestination');
                 editRouteDestination.addEventListener('change', updateEditMap);
                 
@@ -840,7 +809,6 @@ Edit
                                 dashArray: '10, 10'
                             }).addTo(editMap);
                             
-                            // Fit map to markers
                             const bounds = L.latLngBounds([
                                 [originLat, originLng],
                                 [destLat, destLng]
@@ -850,17 +818,13 @@ Edit
                                 padding: [50, 50]
                             });
                             
-                            // Calculate distance
                             const originLatLng = editOriginMarker.getLatLng();
                             const destLatLng = editDestinationMarker.getLatLng();
-                            
-                            // Approximate nautical miles calculation
                             const distanceKm = originLatLng.distanceTo(destLatLng) / 1000;
-                            const distanceNM = distanceKm * 0.539957; // Convert km to nautical miles
+                            const distanceNM = distanceKm * 0.539957;
                             
                             document.getElementById('editRouteDistance').value = distanceNM.toFixed(1);
                             
-                            // Estimate duration (assuming average speed of 15 knots)
                             const durationDays = distanceNM / (15 * 24);
                             document.getElementById('editRouteDuration').value = durationDays.toFixed(1);
                         }
@@ -876,23 +840,19 @@ Edit
             });
         }
         
-        // Handle Delete Route Modal
         const deleteRouteModal = document.getElementById('deleteRouteModal');
         if (deleteRouteModal) {
             deleteRouteModal.addEventListener('show.bs.modal', function (event) {
                 const button = event.relatedTarget;
                 
-                // Extract data from button attributes
                 const id = button.getAttribute('data-id');
                 const name = button.getAttribute('data-name');
                 
-                // Set modal content
                 document.getElementById('deleteRouteId').value = id;
                 document.getElementById('deleteRouteName').textContent = name;
             });
         }
         
-        // Auto-dismiss alerts after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(function(alert) {

@@ -147,7 +147,6 @@
     </style>
 </head>
 <body>
-<!-- Messages -->
 {% if messages %}
 <div class="message-container">
     {% for message in messages %}
@@ -159,7 +158,6 @@
 </div>
 {% endif %}
 
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Admin Menu</h5>
     <hr class="bg-light">
@@ -174,7 +172,6 @@
     </div>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -187,7 +184,6 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     {% if error %}
     <div class="alert alert-danger">
@@ -195,7 +191,6 @@
     </div>
     {% else %}
 
-<!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-3 mb-3">
         <div class="stat-card border-primary">
@@ -252,9 +247,7 @@
     </div>
 </div>
 
-    <!-- Booking Trends and Stats -->
     <div class="row mb-4">
-        <!-- Booking Trends Chart -->
         <div class="col-lg-8 mb-4">
             <div class="dashboard-card">
                 <h5 class="mb-3"><i class="bi bi-graph-up me-2"></i>Booking Trends</h5>
@@ -289,7 +282,6 @@
             </div>
         </div>
 
-        <!-- Booking Stats -->
         <div class="col-lg-4 mb-4">
             <div class="dashboard-card h-100">
                 <h5 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Booking Statistics</h5>
@@ -305,9 +297,7 @@
         </div>
     </div>
 
-    <!-- Top Routes and Cargo Types -->
     <div class="row mb-4">
-        <!-- Top Routes -->
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card">
                 <h5 class="mb-3"><i class="bi bi-map me-2"></i>Top Routes by Revenue</h5>
@@ -342,7 +332,6 @@
             </div>
         </div>
 
-        <!-- Cargo Types -->
         <div class="col-lg-6 mb-4">
             <div class="dashboard-card">
                 <h5 class="mb-3"><i class="bi bi-box-seam me-2"></i>Cargo Distribution</h5>
@@ -364,7 +353,6 @@
         </div>
     </div>
 
-    <!-- Recent Activity -->
     <div class="dashboard-card mb-4">
         <h5 class="mb-3"><i class="bi bi-activity me-2"></i>Recent System Activity</h5>
         <ul class="nav nav-tabs mb-3" id="activityTabs" role="tablist">
@@ -379,7 +367,6 @@
             </li>
         </ul>
         <div class="tab-content" id="activityTabsContent">
-            <!-- Bookings Tab -->
             <div class="tab-pane fade show active" id="bookings" role="tabpanel" aria-labelledby="bookings-tab">
                 <div class="row">
                     <div class="col-md-6">
@@ -422,7 +409,6 @@
                     </div>
                 </div>
             </div>
-            <!-- Schedules Tab -->
             <div class="tab-pane fade" id="schedules" role="tabpanel" aria-labelledby="schedules-tab">
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -453,7 +439,6 @@
                     </table>
                 </div>
             </div>
-            <!-- Users Tab -->
             <div class="tab-pane fade" id="users" role="tabpanel" aria-labelledby="users-tab">
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -487,7 +472,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -504,7 +488,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-hide messages after 5 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
@@ -513,10 +496,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
     
-    // Chart.js configuration
     const chartColors = ['#0d6efd', '#20c997', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#6610f2'];
     
-    // Daily Bookings Chart
     const dailyBookingData = {{ daily_booking_data|safe }};
     if (dailyBookingData && dailyBookingData.dates && dailyBookingData.dates.length > 0) {
         const ctxDaily = document.getElementById('dailyBookingsChart').getContext('2d');
@@ -562,7 +543,6 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
     }
     
-    // Weekly Bookings Chart
     const weeklyBookingData = {{ weekly_booking_data|safe }};
     if (weeklyBookingData && weeklyBookingData.weeks && weeklyBookingData.weeks.length > 0) {
         const ctxWeekly = document.getElementById('weeklyBookingsChart').getContext('2d');
@@ -632,7 +612,6 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
     }
     
-    // Monthly Bookings Chart
     const monthlyBookingData = {{ monthly_booking_data|safe }};
     if (monthlyBookingData && monthlyBookingData.months && monthlyBookingData.months.length > 0) {
         const ctxMonthly = document.getElementById('monthlyBookingsChart').getContext('2d');
@@ -702,7 +681,6 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div class="text-center py-5 text-muted">No booking data available for this period</div>';
     }
     
-    // Cargo Type Chart
     const cargoTypes = {
         labels: [{% for cargo in cargo_types %}'{{ cargo.cargo_type }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         data: [{% for cargo in cargo_types %}{{ cargo.cargo_count }}{% if not forloop.last %}, {% endif %}{% endfor %}]
@@ -738,7 +716,6 @@ document.addEventListener('DOMContentLoaded', function() {
             '<div class="text-center py-5 text-muted">No cargo type data available</div>';
     }
     
-    // Cargo Status Chart
     const cargoStatus = {
         labels: [{% for status in cargo_status %}'{{ status.status }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
         data: [{% for status in cargo_status %}{{ status.cargo_count }}{% if not forloop.last %}, {% endif %}{% endfor %}]

@@ -146,7 +146,6 @@
     </style>
 </head>
 <body>
-<!-- Messages -->
 {% if messages %}
 <div class="message-container">
     {% for message in messages %}
@@ -158,7 +157,6 @@
 </div>
 {% endif %}
 
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -172,7 +170,6 @@
     <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -186,10 +183,8 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="booking-card">
-        <!-- Booking Header -->
         <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">My Bookings</h3>
@@ -200,7 +195,6 @@
             <hr>
         </div>
         
-        <!-- Booking Tabs -->
         <ul class="nav nav-tabs mb-4" id="bookingTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="direct-tab" data-bs-toggle="tab" data-bs-target="#direct-bookings" type="button" role="tab" aria-controls="direct-bookings" aria-selected="true">
@@ -220,9 +214,7 @@
             </li>
         </ul>
         
-        <!-- Tab Content -->
         <div class="tab-content" id="bookingTabsContent">
-            <!-- Direct Bookings Tab -->
             <div class="tab-pane fade show active" id="direct-bookings" role="tabpanel" aria-labelledby="direct-tab">
                 {% if direct_bookings %}
                     {% for booking in direct_bookings %}
@@ -297,7 +289,6 @@
                 {% endif %}
             </div>
             
-            <!-- Connected Bookings Tab -->
             <div class="tab-pane fade" id="connected-bookings" role="tabpanel" aria-labelledby="connected-tab">
                 {% if connected_bookings %}
                     {% for booking in connected_bookings %}
@@ -381,7 +372,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -398,7 +388,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-hide messages after 5 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {

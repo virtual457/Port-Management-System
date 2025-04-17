@@ -124,7 +124,6 @@
     </style>
 </head>
 <body>
-<!-- Messages -->
 {% if messages %}
 <div class="message-container">
     {% for message in messages %}
@@ -136,7 +135,6 @@
 </div>
 {% endif %}
 
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Shipowner Menu</h5>
     <hr class="bg-light">
@@ -149,7 +147,6 @@
     <a href="/shipowner/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -163,10 +160,8 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="reports-card">
-        <!-- Report Header -->
         <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">Shipping Revenue Analytics</h3>
@@ -186,7 +181,6 @@
             <hr>
         </div>
         
-        <!-- Statistics Cards -->
         <div class="row mb-4">
             <div class="col-md-3 mb-3">
                 <div class="stat-card border-primary">
@@ -219,7 +213,6 @@
             </div>
         </div>
         
-        <!-- Charts Row -->
         <div class="row mb-4">
             <div class="col-lg-6 mb-4">
                 <div class="card h-100">
@@ -248,7 +241,6 @@
             </div>
         </div>
         
-        <!-- Second Row of Charts -->
         <div class="row mb-4">
             <div class="col-lg-12">
                 <div class="card">
@@ -264,7 +256,6 @@
             </div>
         </div>
         
-<!-- Upcoming Voyages Table -->
 <div class="card mb-4">
     <div class="card-header bg-warning">
         <h5 class="mb-0 text-dark">Upcoming Voyages</h5>
@@ -321,7 +312,6 @@
     </div>
 </div>
         
-<!-- Recent Bookings Table -->
 <div class="card">
     <div class="card-header bg-secondary text-white">
         <h5 class="mb-0">Recent Bookings</h5>
@@ -378,7 +368,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -395,7 +384,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-hide messages after 5 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
@@ -404,10 +392,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
     
-    // Chart.js configuration
     const chartColors = ['#0d6efd', '#20c997', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#6610f2'];
     
-    // Ship Utilization Chart
     const shipUtilizationData = {{ ship_utilization_data|safe }};
     const ctxShipUtilization = document.getElementById('shipUtilizationChart').getContext('2d');
     new Chart(ctxShipUtilization, {
@@ -442,7 +428,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Revenue by Route Chart
     const revenueByRouteData = {{ revenue_by_route_data|safe }};
     const ctxRevenueByRoute = document.getElementById('revenueByRouteChart').getContext('2d');
     new Chart(ctxRevenueByRoute, {
@@ -466,7 +451,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Monthly Revenue Chart
     const monthlyRevenueData = {{ monthly_revenue_data|safe }};
     const ctxMonthlyRevenue = document.getElementById('monthlyRevenueChart').getContext('2d');
     new Chart(ctxMonthlyRevenue, {

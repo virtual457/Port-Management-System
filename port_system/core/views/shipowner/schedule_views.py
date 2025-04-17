@@ -6,10 +6,6 @@ import json
 from datetime import datetime
 
 def create_schedule_form(request):
-    """
-    View for displaying the schedule creation form
-    """
-    # Get ships owned by the current user
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT ship_id, name, ship_type, capacity, 
@@ -30,7 +26,6 @@ def create_schedule_form(request):
             for row in cursor.fetchall()
         ]
         
-        # Get routes available to the user
         cursor.execute("""
             SELECT r.route_id, r.name, 
                    r.origin_port_id, op.name as origin_port_name,
@@ -66,24 +61,18 @@ def create_schedule_form(request):
     return render(request, 'create_schedule.html', context)
 
 def create_schedule(request):
-    """
-    Handle the POST request for creating a new schedule with berth bookings
-    """
     if request.method != 'POST':
         return redirect('create-schedule-form')
     
-    # Get form data
     ship_id = request.POST.get('ship_id')
     route_id = request.POST.get('route_id')
     max_cargo = request.POST.get('max_cargo')
     status = request.POST.get('status')
     notes = request.POST.get('notes', '')
     
-    # Departure and arrival times
     departure_date = request.POST.get('departure_date')
     arrival_date = request.POST.get('arrival_date')
     
-    # Berth booking details
     origin_berth_id = request.POST.get('origin_berth_id')
     origin_berth_start = request.POST.get('origin_berth_start')
     origin_berth_end = request.POST.get('origin_berth_end')
@@ -92,28 +81,23 @@ def create_schedule(request):
     destination_berth_start = request.POST.get('destination_berth_start')
     destination_berth_end = request.POST.get('destination_berth_end')
     
-    # Validate required fields
     if not all([ship_id, route_id, departure_date, arrival_date, 
                 origin_berth_id, origin_berth_start, origin_berth_end,
                 destination_berth_id, destination_berth_start, destination_berth_end]):
         messages.error(request, "All fields are required")
         return redirect('create-schedule-form')
     
-    # Validate time ranges
     try:
-        # Convert string dates to datetime objects
         from datetime import datetime
         o_start = datetime.strptime(origin_berth_start, '%Y-%m-%d %H:%M')
         o_end = datetime.strptime(origin_berth_end, '%Y-%m-%d %H:%M')
         d_start = datetime.strptime(destination_berth_start, '%Y-%m-%d %H:%M')
         d_end = datetime.strptime(destination_berth_end, '%Y-%m-%d %H:%M')
         
-        # Validate origin berth times
         if o_start >= o_end:
             messages.error(request, "Origin berth booking: Start time must be earlier than end time")
             return redirect('create-schedule-form')
         
-        # Validate destination berth times
         if d_start >= d_end:
             messages.error(request, "Destination berth booking: Start time must be earlier than end time")
             return redirect('create-schedule-form')
@@ -122,8 +106,6 @@ def create_schedule(request):
         messages.error(request, f"Invalid date format: {str(e)}")
         return redirect('create-schedule-form')
     
-    print("calling create schedule with berths")
-    # Use stored procedure to create schedule with berth assignments
     with connection.cursor() as cursor:
         try:
             cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
@@ -131,7 +113,6 @@ def create_schedule(request):
             import pymysql
             safe_notes = pymysql.converters.escape_string(notes)
             
-            # Call the stored procedure
             cursor.execute(f"""
             CALL create_schedule_with_berths(
                 {ship_id}, {route_id}, {max_cargo}, '{status}', '{safe_notes}',
@@ -144,9 +125,6 @@ def create_schedule(request):
             
             cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
             schedule_id, success, message = cursor.fetchone()
-            print("schedule_id", schedule_id)
-            print("success", success)
-            print("message", message)
             
             if success:
                 messages.success(request, message)
@@ -156,8 +134,6 @@ def create_schedule(request):
                 return redirect('create-schedule-form')
                 
         except Exception as e:
-            print(f"Error creating schedule: {str(e)}")
-            
             if "valid_assignment_times" in str(e):
                 messages.error(request, "Berth booking times are invalid: arrival time must be earlier than departure time")
             else:
@@ -166,9 +142,6 @@ def create_schedule(request):
             return redirect('create-schedule-form')
 
 def get_available_berths(request, port_id):
-    """
-    API endpoint to get available berths for a port
-    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Invalid request method'}, status=400)
     
@@ -208,12 +181,8 @@ def get_available_berths(request, port_id):
             
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-    
 
 def check_berth_availability_ajax(request):
-    """
-    AJAX endpoint to check berth availability
-    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Invalid request method'}, status=400)
     
@@ -226,19 +195,14 @@ def check_berth_availability_ajax(request):
         if not all([berth_id, start_time, end_time]):
             return JsonResponse({'error': 'Missing required parameters'}, status=400)
         
-        # Convert string dates to datetime objects if needed
         try:
             start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M')
             end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M')
         except (ValueError, TypeError):
-            # Already in datetime format or invalid
             pass
         
         with connection.cursor() as cursor:
-
             cursor.execute("SET @p_is_available = 0, @p_conflict_details = '';")
-
-    # Step 2: Call the procedure using those session variables
             cursor.execute(f"""
                 CALL check_berth_availability(
                 {berth_id}, 
@@ -248,18 +212,14 @@ def check_berth_availability_ajax(request):
                 @p_conflict_details
                 );
                 """)
-
-    # Step 3: Retrieve OUT parameters
+            
             cursor.execute("SELECT @p_is_available, @p_conflict_details;")
             is_available, conflict_details = cursor.fetchone()
-
-            print("is_available", is_available)
-            print("conflict_details", conflict_details)
-
+            
             return JsonResponse({
                 'is_available': bool(is_available),
-                'message': conflict_details
+                'conflict_details': conflict_details if not bool(is_available) else ''
             })
-
+            
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

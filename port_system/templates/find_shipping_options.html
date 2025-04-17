@@ -222,7 +222,6 @@
     </style>
 </head>
 <body>
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -235,7 +234,6 @@
     <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -249,11 +247,9 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     
     <div class="search-card">
-        <!-- Messages/Alerts section -->
     {% if messages %}
     {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
@@ -267,7 +263,6 @@
                 <div class="sticky-top pt-3" style="top: 100px;">
                     <h4 class="mb-4">Search Shipping Options</h4>
 
-                    <!-- Search Form -->
                     <form id="shippingSearchForm" method="get" action="/customer/find-shipping">
                         <div class="mb-3">
                             <label for="originPort" class="form-label">Origin Port</label>
@@ -324,7 +319,6 @@
                         </div>
                     </form>
                     
-                    <!-- Cargo Details Panel (shows when cargo is selected) -->
                     <div id="cargoDetailsPanel" class="mt-4" style="display: none;">
                         <h5>Selected Cargo Details</h5>
                         <div class="p-3 border rounded bg-light">
@@ -349,17 +343,14 @@
                 <div class="pt-3">
                     <h4 class="mb-4">Available Shipping Options</h4>
                     
-                    <!-- Route Map (shows when routes are found) -->
                     <div id="routeMapContainer" style="display: none;">
                         <h5 class="mb-3">Route Map Visualization</h5>
                         <p class="text-muted small mb-2">Click on a shipping option below to highlight its route on the map</p>
                         <div id="routeMap"></div>
                     </div>
 
-                    <!-- Results or Initial Message -->
                     {% if is_search_submitted %}
                         {% if shipping_options %}
-                            <!-- Direct Routes Section -->
                             {% if direct_routes %}
                                 <h5 class="mb-3">Direct Routes</h5>
                                 {% for option in direct_routes %}
@@ -435,7 +426,6 @@
                                 {% endfor %}
                             {% endif %}
                             
-                            <!-- Connected Routes Section -->
                             {% if connected_routes %}
                                 <h5 class="mb-3 mt-4">Connecting Routes</h5>
                                 {% for option in connected_routes %}
@@ -448,7 +438,6 @@
                                             <span class="badge bg-primary route-badge">{{ option.total_duration }} days total</span>
                                         </div>
                                         <div class="option-body">
-                                            <!-- Connected route overview -->
                                             <div class="row mb-4">
                                                 <div class="col-md-5">
                                                     <small class="text-muted mb-1 d-block">FIRST DEPARTURE</small>
@@ -471,7 +460,6 @@
                                                 </div>
                                             </div>
                                             
-                                            <!-- Route segments -->
                                             <div class="route-segments mb-4">
                                                 {% for segment in option.segments %}
                                                 <div class="route-segment"
@@ -562,22 +550,16 @@
 </div>
 
 <script>
-    // Sidebar toggle functionality
     
 
-    // This function will be called when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Set default dates if not already set
     initializeDateFields();
     
-    // Initialize cargo selection handling
     initializeCargoSelection();
     
-    // Initialize the map when shipping options are available
     initializeRouteMap();
 });
 
-// Initialize default dates for search form
 function initializeDateFields() {
     const earliestDeparture = document.getElementById('earliestDeparture');
     const latestArrival = document.getElementById('latestArrival');
@@ -594,7 +576,6 @@ function initializeDateFields() {
     }
 }
 
-// Handle cargo selection and display cargo details
 function initializeCargoSelection() {
     const cargoSelect = document.getElementById('cargoSelect');
     const cargoDetailsPanel = document.getElementById('cargoDetailsPanel');
@@ -609,7 +590,6 @@ function initializeCargoSelection() {
             const cargoId = selectedOption.value;
             
             if (cargoId) {
-                // Display cargo details
                 fetch(`/api/cargo/${cargoId}`)
                     .then(response => response.json())
                     .then(data => {
@@ -621,7 +601,6 @@ function initializeCargoSelection() {
                     })
                     .catch(error => {
                         console.error('Error fetching cargo details:', error);
-                        // Fallback to basic display with available data
                         cargoDescription.textContent = selectedOption.textContent.split('(')[0].trim() || 'No description available';
                         cargoType.textContent = 'Not specified';
                         cargoWeight.textContent = selectedOption.dataset.weight || '0';
@@ -633,45 +612,36 @@ function initializeCargoSelection() {
             }
         });
         
-        // Trigger change event if a cargo is already selected
         if (cargoSelect.value) {
             cargoSelect.dispatchEvent(new Event('change'));
         }
     }
 }
 
-// Parse route data from the HTML to JavaScript objects
 function parseRouteData() {
-    // Get all direct route cards
     const directRouteCards = document.querySelectorAll('.option-card[data-route-id^="direct-"]');
     const connectingRouteCards = document.querySelectorAll('.option-card[data-route-id^="connecting-"]');
     
-    // Parse direct routes
     directRouteCards.forEach((optionCard, index) => {
         const routeId = optionCard.getAttribute('data-route-id') || `direct-${index}`;
         
-        // Extract route data from the card
         const originPortElement = optionCard.querySelector('.port-name:first-of-type');
         const destinationPortElement = optionCard.querySelector('.port-name:last-of-type');
         
-        // Check if elements exist before accessing textContent
         if (!originPortElement || !destinationPortElement) {
             console.warn('Missing port elements in route card:', routeId);
-            return; // Skip this route
+            return;
         }
         
         const originPort = originPortElement.textContent;
         const destinationPort = destinationPortElement.textContent;
         
-        // Get coordinates from data attributes
         const originLat = parseFloat(optionCard.getAttribute('data-origin-lat') || 0);
         const originLng = parseFloat(optionCard.getAttribute('data-origin-lng') || 0);
         const destLat = parseFloat(optionCard.getAttribute('data-dest-lat') || 0);
         const destLng = parseFloat(optionCard.getAttribute('data-dest-lng') || 0);
         
-        // Only add routes with valid coordinates
         if (originLat && originLng && destLat && destLng) {
-            // Store route data
             window.allRoutes.push({
                 id: routeId,
                 type: 'direct',
@@ -683,39 +653,34 @@ function parseRouteData() {
         }
     });
     
-    // Parse connecting routes
     connectingRouteCards.forEach((optionCard, index) => {
         const routeId = optionCard.getAttribute('data-route-id') || `connecting-${index}`;
         
-        // Extract segments from the card
         const segments = [];
         const routeSegments = optionCard.querySelectorAll('.route-segment');
         
         if (routeSegments.length === 0) {
             console.warn('No route segments found for connecting route:', routeId);
-            return; // Skip this route
+            return; 
         }
         
         routeSegments.forEach((segment, segIndex) => {
             const originPortElement = segment.querySelector('.port-name:first-of-type');
             const destinationPortElement = segment.querySelector('.port-name:last-of-type');
             
-            // Check if elements exist before accessing textContent
             if (!originPortElement || !destinationPortElement) {
                 console.warn(`Missing port elements in segment ${segIndex} of route:`, routeId);
-                return; // Skip this segment
+                return;
             }
             
             const originPort = originPortElement.textContent;
             const destinationPort = destinationPortElement.textContent;
             
-            // Get coordinates from data attributes
             const segOriginLat = parseFloat(segment.getAttribute('data-origin-lat') || 0);
             const segOriginLng = parseFloat(segment.getAttribute('data-origin-lng') || 0);
             const segDestLat = parseFloat(segment.getAttribute('data-dest-lat') || 0);
             const segDestLng = parseFloat(segment.getAttribute('data-dest-lng') || 0);
             
-            // Only add segments with valid coordinates
             if (segOriginLat && segOriginLng && segDestLat && segDestLng) {
                 segments.push({
                     origin: { name: originPort, lat: segOriginLat, lng: segOriginLng },
@@ -724,9 +689,7 @@ function parseRouteData() {
             }
         });
         
-        // Only add routes with at least one valid segment
         if (segments.length > 0) {
-            // Store route data
             window.allRoutes.push({
                 id: routeId,
                 type: 'connecting',
@@ -738,28 +701,22 @@ function parseRouteData() {
     console.log('Parsed routes:', window.allRoutes);
 }
 
-// Initialize the route map with all shipping options
-// Initialize the route map with all shipping options
 function initializeRouteMap() {
     const routeMapContainer = document.getElementById('routeMapContainer');
     if (!routeMapContainer) return;
     
-    // Check if we have shipping options before displaying the map
     if (document.querySelector('.option-card')) {
         routeMapContainer.style.display = 'block';
         
-        // Create a global map object so it can be accessed by other functions
         window.routeMap = L.map('routeMap').setView([20, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(window.routeMap);
         
-        // Store all route data for later use
         window.allRoutes = [];
         window.routeMarkers = [];
         window.routeLines = [];
         
-        // Process direct routes
         document.querySelectorAll('.option-card[data-route-id^="direct-"]').forEach((card, index) => {
             const routeId = card.getAttribute('data-route-id');
             const originLat = parseFloat(card.getAttribute('data-origin-lat') || 0);
@@ -768,7 +725,6 @@ function initializeRouteMap() {
             const destLng = parseFloat(card.getAttribute('data-dest-lng') || 0);
             
             if (originLat && originLng && destLat && destLng) {
-                // Get port names
                 const portNames = card.querySelectorAll('.port-name');
                 const originName = portNames.length > 0 ? portNames[0].textContent : "Origin";
                 const destName = portNames.length > 1 ? portNames[1].textContent : "Destination";
@@ -784,12 +740,10 @@ function initializeRouteMap() {
             }
         });
         
-        // Process connecting routes
         document.querySelectorAll('.option-card[data-route-id^="connecting-"]').forEach((card, index) => {
             const routeId = card.getAttribute('data-route-id');
             const segments = [];
             
-            // Get all segments within this card
             card.querySelectorAll('.route-segment').forEach((segment) => {
                 const originLat = parseFloat(segment.getAttribute('data-origin-lat') || 0);
                 const originLng = parseFloat(segment.getAttribute('data-origin-lng') || 0);
@@ -797,7 +751,6 @@ function initializeRouteMap() {
                 const destLng = parseFloat(segment.getAttribute('data-dest-lng') || 0);
                 
                 if (originLat && originLng && destLat && destLng) {
-                    // Get port names
                     const portNames = segment.querySelectorAll('.port-name');
                     const originName = portNames.length > 0 ? portNames[0].textContent : "Origin";
                     const destName = portNames.length > 1 ? portNames[1].textContent : "Destination";
@@ -809,7 +762,6 @@ function initializeRouteMap() {
                 }
             });
             
-            // Only add connecting routes with segments
             if (segments.length > 0) {
                 window.allRoutes.push({
                     id: routeId,
@@ -821,7 +773,6 @@ function initializeRouteMap() {
         
         console.log("Processed routes:", window.allRoutes);
         
-        // Show all routes if we have any
         if (window.allRoutes.length > 0) {
             showAllRoutes();
             addOptionCardClickHandlers();
@@ -829,22 +780,17 @@ function initializeRouteMap() {
     }
 }
 
-// Display all routes on the map
 function showAllRoutes() {
-    // Clear existing markers and lines
     clearMapRoutes();
     
-    // Collect all points for map bounds
     const bounds = [];
     
-    // Add all routes to the map
     window.allRoutes.forEach(route => {
         const isConnecting = route.type === 'connecting';
         const color = isConnecting ? '#6f42c1' : '#0d6efd';
         const dashArray = isConnecting ? '5, 5' : null;
         
         route.segments.forEach(segment => {
-            // Add origin marker
             if (segment.origin.lat && segment.origin.lng) {
                 const marker = L.marker([segment.origin.lat, segment.origin.lng])
                     .addTo(window.routeMap)
@@ -853,7 +799,6 @@ function showAllRoutes() {
                 bounds.push([segment.origin.lat, segment.origin.lng]);
             }
             
-            // Add destination marker
             if (segment.destination.lat && segment.destination.lng) {
                 const marker = L.marker([segment.destination.lat, segment.destination.lng])
                     .addTo(window.routeMap)
@@ -862,7 +807,6 @@ function showAllRoutes() {
                 bounds.push([segment.destination.lat, segment.destination.lng]);
             }
             
-            // Add route line
             if (segment.origin.lat && segment.origin.lng && segment.destination.lat && segment.destination.lng) {
                 const line = L.polyline(
                     [[segment.origin.lat, segment.origin.lng], [segment.destination.lat, segment.destination.lng]],
@@ -878,31 +822,24 @@ function showAllRoutes() {
         });
     });
     
-    // Fit map to show all points
     if (bounds.length > 0) {
         window.routeMap.fitBounds(bounds, { padding: [30, 30] });
     }
 }
 
-// Show a specific route on the map
 function showRoute(routeId) {
-    // Find the selected route
     const route = window.allRoutes.find(r => r.id === routeId);
     if (!route) return;
     
-    // Clear existing markers and lines
     clearMapRoutes();
     
-    // Collect all points for map bounds
     const bounds = [];
     
-    // Add selected route to the map
     const isConnecting = route.type === 'connecting';
     const color = isConnecting ? '#6f42c1' : '#0d6efd';
     const dashArray = isConnecting ? '5, 5' : null;
     
     route.segments.forEach(segment => {
-        // Add origin marker
         if (segment.origin.lat && segment.origin.lng) {
             const marker = L.marker([segment.origin.lat, segment.origin.lng])
                 .addTo(window.routeMap)
@@ -911,7 +848,6 @@ function showRoute(routeId) {
             bounds.push([segment.origin.lat, segment.origin.lng]);
         }
         
-        // Add destination marker
         if (segment.destination.lat && segment.destination.lng) {
             const marker = L.marker([segment.destination.lat, segment.destination.lng])
                 .addTo(window.routeMap)
@@ -920,7 +856,6 @@ function showRoute(routeId) {
             bounds.push([segment.destination.lat, segment.destination.lng]);
         }
         
-        // Add route line
         if (segment.origin.lat && segment.origin.lng && segment.destination.lat && segment.destination.lng) {
             const line = L.polyline(
                 [[segment.origin.lat, segment.origin.lng], [segment.destination.lat, segment.destination.lng]],
@@ -935,39 +870,31 @@ function showRoute(routeId) {
         }
     });
     
-    // Fit map to show all points
     if (bounds.length > 0) {
         window.routeMap.fitBounds(bounds, { padding: [30, 30] });
     }
 }
 
-// Clear all markers and lines from the map
 function clearMapRoutes() {
-    // Remove all markers
     window.routeMarkers.forEach(marker => {
         window.routeMap.removeLayer(marker);
     });
     window.routeMarkers = [];
-    
-    // Remove all lines
     window.routeLines.forEach(line => {
         window.routeMap.removeLayer(line);
     });
     window.routeLines = [];
 }
 
-// Add click handlers to option cards
 function addOptionCardClickHandlers() {
     const optionCards = document.querySelectorAll('.option-card');
     
-    // Add a "show all routes" button to the top of the map
     const mapContainer = document.getElementById('routeMapContainer');
     if (mapContainer) {
         const showAllButton = document.createElement('button');
         showAllButton.className = 'btn btn-sm btn-outline-secondary mb-2';
         showAllButton.innerHTML = '<i class="bi bi-map"></i> Show All Routes';
         showAllButton.addEventListener('click', function() {
-            // Reset all cards to default state
             optionCards.forEach(card => {
                 card.classList.remove('selected-route');
             });
@@ -977,28 +904,22 @@ function addOptionCardClickHandlers() {
         mapContainer.insertBefore(showAllButton, document.getElementById('routeMap'));
     }
     
-    // Add click handler to each card
     optionCards.forEach(card => {
         card.addEventListener('click', function() {
             const routeId = this.getAttribute('data-route-id');
             
-            // Skip if clicking on buttons in the card
             if (event.target.closest('a.btn') || event.target.closest('button')) {
                 return;
             }
             
-            // Toggle selection status
             if (this.classList.contains('selected-route')) {
-                // Deselect and show all routes
                 this.classList.remove('selected-route');
                 showAllRoutes();
             } else {
-                // Deselect all other cards
                 optionCards.forEach(c => {
                     c.classList.remove('selected-route');
                 });
                 
-                // Select this card and show its route
                 this.classList.add('selected-route');
                 showRoute(routeId);
             }
@@ -1006,7 +927,6 @@ function addOptionCardClickHandlers() {
     });
 }
 
-// Sidebar toggle functionality
 const toggle = document.getElementById('sidebarToggle');
 const sidebar = document.getElementById('sidebar');
 

@@ -42,7 +42,7 @@ urlpatterns = [
     path('admin/ports/<int:port_id>/', port_details_view.port_details, name='port-details'),
     
 
-    # Dashboards (each view checks for correct role)
+    # Dashboards
     path('admin/dashboard/', views.admin_dashboard, name='admin-dashboard'),
     path('manager/dashboard/', views.manager_dashboard, name='manager-dashboard'),
     path('staff/dashboard/', views.staff_dashboard, name='staff-dashboard'),

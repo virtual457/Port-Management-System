@@ -7,33 +7,24 @@ from django.urls import reverse
 
 
 def manage_berths(request):
-    """
-    View for managing berths for ports.
-    Allows admins to view, add, edit, and delete berths.
-    """
-    # Get all active ports for the dropdown
     with connection.cursor() as cursor:
         cursor.execute("SELECT port_id, name, country FROM ports WHERE status = 'active' ORDER BY name")
         ports = [{'id': row[0], 'name': row[1], 'country': row[2]} for row in cursor.fetchall()]
     
-    # Check if a port is selected
     selected_port = request.GET.get('port_id')
     berths = []
     selected_port_name = ""
     
     if selected_port:
-        # Get the port name for display
         with connection.cursor() as cursor:
             cursor.execute("SELECT name FROM ports WHERE port_id = %s", [selected_port])
             port_data = cursor.fetchone()
             if port_data:
                 selected_port_name = port_data[0]
         
-        # Get filter parameters
         berth_type = request.GET.get('type')
         status = request.GET.get('status')
         
-        # Fetch berths for the selected port with optional filters
         query = """
             SELECT berth_id, berth_number, type, length, width, depth, status
             FROM berths
@@ -66,9 +57,8 @@ def manage_berths(request):
                 for row in cursor.fetchall()
             ]
         
-        # Pagination
         page = request.GET.get('page', 1)
-        paginator = Paginator(berths, 10)  # Show 10 berths per page
+        paginator = Paginator(berths, 10)
         berths = paginator.get_page(page)
     
     context = {
@@ -82,7 +72,6 @@ def manage_berths(request):
 
 
 def add_berth(request):
-    """Handle adding a new berth"""
     if request.method == 'POST':
         port_id = request.POST.get('port_id')
         berth_number = request.POST.get('berth_number')
@@ -93,7 +82,6 @@ def add_berth(request):
         status = request.POST.get('status')
         
         try:
-            # Check if the berth number already exists for this port
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT COUNT(*) FROM berths WHERE port_id = %s AND berth_number = %s",
@@ -103,7 +91,6 @@ def add_berth(request):
                     messages.error(request, f"Berth number {berth_number} already exists for this port.")
                     return redirect(f'/admin/manage-berths?port_id={port_id}')
                 
-                # Insert the new berth
                 cursor.execute(
                     """
                     INSERT INTO berths 
@@ -119,12 +106,10 @@ def add_berth(request):
         
         return redirect(f'/admin/manage-berths?port_id={port_id}')
     
-    # If not POST, redirect to the manage berths page
     return redirect('/admin/manage-berths')
 
 
 def edit_berth(request):
-    """Handle editing an existing berth"""
     if request.method == 'POST':
         berth_id = request.POST.get('berth_id')
         port_id = request.POST.get('port_id')
@@ -136,7 +121,6 @@ def edit_berth(request):
         status = request.POST.get('status')
         
         try:
-            # Check if the berth number already exists for another berth in this port
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
@@ -149,7 +133,6 @@ def edit_berth(request):
                     messages.error(request, f"Berth number {berth_number} is already in use by another berth.")
                     return redirect(f'/admin/manage-berths?port_id={port_id}')
                 
-                # Update the berth
                 cursor.execute(
                     """
                     UPDATE berths 
@@ -165,18 +148,15 @@ def edit_berth(request):
         
         return redirect(f'/admin/manage-berths?port_id={port_id}')
     
-    # If not POST, redirect to the manage berths page
     return redirect('/admin/manage-berths')
 
 
 def delete_berth(request):
-    """Handle deleting a berth"""
     if request.method == 'POST':
         berth_id = request.POST.get('berth_id')
         port_id = request.POST.get('port_id')
         
         try:
-            # Get the berth number for the success message
             berth_number = ""
             with connection.cursor() as cursor:
                 cursor.execute("SELECT berth_number FROM berths WHERE berth_id = %s", [berth_id])
@@ -184,14 +164,12 @@ def delete_berth(request):
                 if result:
                     berth_number = result[0]
                 
-                # Check if the berth is currently in use (occupied)
                 cursor.execute("SELECT status FROM berths WHERE berth_id = %s", [berth_id])
                 result = cursor.fetchone()
                 if result and result[0] == 'occupied':
                     messages.error(request, f"Cannot delete berth {berth_number} because it is currently occupied.")
                     return redirect(f'/admin/manage-berths?port_id={port_id}')
                 
-                # Delete the berth
                 cursor.execute("DELETE FROM berths WHERE berth_id = %s", [berth_id])
                 
                 messages.success(request, f"Berth {berth_number} has been deleted successfully.")
@@ -200,5 +178,4 @@ def delete_berth(request):
         
         return redirect(f'/admin/manage-berths?port_id={port_id}')
     
-    # If not POST, redirect to the manage berths page
     return redirect('/admin/manage-berths')

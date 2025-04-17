@@ -9,9 +9,7 @@ import logging
 
 from ..views import role_required
 
-
 logger = logging.getLogger(__name__)
-
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -20,21 +18,13 @@ class DecimalEncoder(json.JSONEncoder):
         return super(DecimalEncoder, self).default(obj)
 
 def dictfetchall(cursor):
-    """
-    Return all rows from a cursor as a list of dictionaries
-    """
     columns = [col[0] for col in cursor.description]
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 @role_required('admin')
 def admin_reports(request):
-    """
-    View for displaying admin dashboard with system-wide statistics and analytics.
-    Uses direct database queries for summary cards and stored procedures for other data.
-    """
-    time_range = request.GET.get('range', '30')  # Default to 30 days for now to not increase complexity
+    time_range = request.GET.get('range', '30')
     
-    # Initialize context with default values
     context = {
         'role_stats': [],
         'cargo_stats': [],
@@ -113,11 +103,9 @@ ORDER BY
             """)
             context['port_stats'] = dictfetchall(cursor)
             
-            # Get total ports count
             cursor.execute("SELECT COUNT(*) as total_ports FROM ports;")
             context['total_ports'] = cursor.fetchone()[0]
             
-            # 4. Get revenue data with direct SQL
             cursor.execute("""
                 SELECT 
                     'direct' as booking_type,
@@ -142,12 +130,8 @@ ORDER BY
             }
             context['total_calculated_revenue'] = float(direct_revenue) + float(connected_revenue)
             
-            # ========== CONTINUE WITH STORED PROCEDURES FOR OTHER DATA ==========
-            
-            # Get booking trends
             cursor.callproc('get_admin_booking_trends', [days_back])
             
-            # Process daily booking data
             daily_bookings = {}
             for row in dictfetchall(cursor):
                 date_str = row['booking_day'].strftime('%Y-%m-%d')
@@ -155,7 +139,6 @@ ORDER BY
                     daily_bookings[date_str] = {'direct': 0, 'connected': 0}
                 daily_bookings[date_str][row['booking_type']] = row['booking_count']
             
-            # Fill in missing dates in the range
             all_dates = []
             if daily_bookings:
                 start_date = min(datetime.strptime(date_str, '%Y-%m-%d') for date_str in daily_bookings.keys())
@@ -169,7 +152,6 @@ ORDER BY
                         daily_bookings[date_str] = {'direct': 0, 'connected': 0}
                     current_date += timedelta(days=1)
             
-            # Sort dates and organize data for the chart
             daily_data = {
                 'dates': [],
                 'direct': [],
@@ -181,7 +163,6 @@ ORDER BY
                 daily_data['direct'].append(daily_bookings[date_str]['direct'])
                 daily_data['connected'].append(daily_bookings[date_str]['connected'])
             
-            # Go to next result set - weekly booking data
             cursor.nextset()
             weekly_bookings = {}
             for row in dictfetchall(cursor):
@@ -201,7 +182,6 @@ ORDER BY
                     weekly_bookings[week_str]['connected_count'] = row['booking_count']
                     weekly_bookings[week_str]['connected_revenue'] = float(row['revenue'] or 0)
             
-            # Organize weekly data for the chart
             weekly_data = {
                 'weeks': [],
                 'direct_count': [],
@@ -217,7 +197,6 @@ ORDER BY
                 weekly_data['direct_revenue'].append(weekly_bookings[week_str]['direct_revenue'])
                 weekly_data['connected_revenue'].append(weekly_bookings[week_str]['connected_revenue'])
             
-            # Process monthly booking data
             cursor.nextset()
             monthly_bookings = {}
             for row in dictfetchall(cursor):
@@ -237,7 +216,6 @@ ORDER BY
                     monthly_bookings[month_str]['connected_count'] = row['booking_count']
                     monthly_bookings[month_str]['connected_revenue'] = float(row['revenue'] or 0)
             
-            # Organize monthly data for the chart
             monthly_data = {
                 'months': [],
                 'direct_count': [],
@@ -247,7 +225,6 @@ ORDER BY
             }
             
             for month_str in sorted(monthly_bookings.keys()):
-                # Format month for display (YYYY-MM to Mon YYYY)
                 try:
                     date_obj = datetime.strptime(month_str, '%Y-%m')
                     formatted_month = date_obj.strftime('%b %Y')
@@ -260,11 +237,9 @@ ORDER BY
                 monthly_data['direct_revenue'].append(monthly_bookings[month_str]['direct_revenue'])
                 monthly_data['connected_revenue'].append(monthly_bookings[month_str]['connected_revenue'])
             
-            # Get top routes by revenue
-            cursor.callproc('get_admin_top_routes', [10])  # Top 10 routes
+            cursor.callproc('get_admin_top_routes', [10])
             context['top_routes'] = dictfetchall(cursor)
             
-            # Get cargo statistics
             cursor.callproc('get_admin_cargo_stats', [])
             context['cargo_types'] = dictfetchall(cursor)
             
@@ -275,10 +250,8 @@ ORDER BY
             cargo_conversion = cursor.fetchone()
             context['conversion_rate'] = cargo_conversion[3] if cargo_conversion else 0
             
-            # Get recent activities
-            cursor.callproc('get_admin_recent_activities', [20])  # Limit to 20 recent activities
+            cursor.callproc('get_admin_recent_activities', [20])
             
-            # Process user registrations
             recent_users = []
             for row in dictfetchall(cursor):
                 if row.get('activity_time'):
@@ -286,7 +259,6 @@ ORDER BY
                 recent_users.append(row)
             context['recent_users'] = recent_users
             
-            # Go to next result set - direct bookings
             cursor.nextset()
             recent_direct_bookings = []
             for row in dictfetchall(cursor):
@@ -295,7 +267,6 @@ ORDER BY
                 recent_direct_bookings.append(row)
             context['recent_direct_bookings'] = recent_direct_bookings
             
-            # Go to next result set - connected bookings
             cursor.nextset()
             recent_connected_bookings = []
             for row in dictfetchall(cursor):
@@ -304,7 +275,6 @@ ORDER BY
                 recent_connected_bookings.append(row)
             context['recent_connected_bookings'] = recent_connected_bookings
             
-            # Go to next result set - schedules
             cursor.nextset()
             recent_schedules = []
             for row in dictfetchall(cursor):
@@ -317,7 +287,6 @@ ORDER BY
                 recent_schedules.append(row)
             context['recent_schedules'] = recent_schedules
             
-            # Add chart data to context
             context['daily_booking_data'] = json.dumps(daily_data, cls=DecimalEncoder)
             context['weekly_booking_data'] = json.dumps(weekly_data, cls=DecimalEncoder)
             context['monthly_booking_data'] = json.dumps(monthly_data, cls=DecimalEncoder)

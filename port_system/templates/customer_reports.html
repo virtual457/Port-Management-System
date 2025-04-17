@@ -124,7 +124,6 @@
     </style>
 </head>
 <body>
-<!-- Messages -->
 {% if messages %}
 <div class="message-container">
     {% for message in messages %}
@@ -136,7 +135,6 @@
 </div>
 {% endif %}
 
-<!-- Sidebar -->
 <div class="sidebar" id="sidebar">
     <h5 class="text-center">Customer Menu</h5>
     <hr class="bg-light">
@@ -148,7 +146,6 @@
     <a href="/customer/support"><i class="bi bi-question-circle me-2"></i> Support</a>
 </div>
 
-<!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm fixed-top">
     <div class="container-fluid px-4 d-flex align-items-center">
         <span class="sidebar-toggle" id="sidebarToggle">&#9776;</span>
@@ -162,10 +159,8 @@
     </div>
 </nav>
 
-<!-- Main Content -->
 <div class="main-content" id="main-content">
     <div class="reports-card">
-        <!-- Report Header -->
         <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center">
                 <h3 class="mb-0">Cargo Shipping Analytics</h3>
@@ -185,7 +180,6 @@
             <hr>
         </div>
         
-        <!-- Statistics Cards -->
         <div class="row mb-4">
             <div class="col-md-3 mb-3">
                 <div class="stat-card border-primary">
@@ -218,7 +212,6 @@
             </div>
         </div>
         
-        <!-- Charts Row -->
         <div class="row mb-4">
             <div class="col-lg-6 mb-4">
                 <div class="card h-100">
@@ -247,7 +240,6 @@
             </div>
         </div>
         
-        <!-- Second Row of Charts -->
         <div class="row mb-4">
             <div class="col-lg-12">
                 <div class="card">
@@ -263,7 +255,6 @@
             </div>
         </div>
         
-<!-- Upcoming Shipments Table -->
 <div class="card mb-4">
     <div class="card-header bg-warning">
         <h5 class="mb-0 text-dark">Upcoming Shipments</h5>
@@ -302,7 +293,6 @@
     </div>
 </div>
         
-<!-- Recent Bookings Table -->
 <div class="card">
     <div class="card-header bg-secondary text-white">
         <h5 class="mb-0">Recent Bookings</h5>
@@ -361,7 +351,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Sidebar toggle functionality
     const toggle = document.getElementById('sidebarToggle');
     const sidebar = document.getElementById('sidebar');
     
@@ -378,7 +367,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-hide messages after 5 seconds
     setTimeout(function() {
         const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
@@ -387,10 +375,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
     
-    // Chart.js configuration
     const chartColors = ['#0d6efd', '#20c997', '#0dcaf0', '#ffc107', '#dc3545', '#6c757d', '#fd7e14', '#6610f2'];
     
-    // Cargo Type Chart
     const cargoTypeData = {{ cargo_type_data|safe }};
     const ctxCargoType = document.getElementById('cargoTypeChart').getContext('2d');
     new Chart(ctxCargoType, {
@@ -414,7 +400,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Booking Status Chart
     const bookingStatusData = {{ booking_status_data|safe }};
     const ctxBookingStatus = document.getElementById('bookingStatusChart').getContext('2d');
     new Chart(ctxBookingStatus, {
@@ -438,7 +423,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Monthly Activity Chart
     const monthlyActivityData = {{ monthly_activity_data|safe }};
     const ctxMonthlyActivity = document.getElementById('monthlyActivityChart').getContext('2d');
     new Chart(ctxMonthlyActivity, {

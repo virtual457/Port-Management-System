@@ -6,10 +6,6 @@ from django.urls import reverse
 
 
 def port_details(request, port_id):
-    """
-    View for displaying detailed information about a port including its berths
-    """
-    # Get port information
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT port_id, name, country, 
@@ -36,7 +32,6 @@ def port_details(request, port_id):
             'created_at': port_data[6]
         }
         
-        # Get berths for this port
         cursor.execute("""
             SELECT berth_id, berth_number, type, length, width, depth, status
             FROM berths
@@ -57,7 +52,6 @@ def port_details(request, port_id):
             for row in cursor.fetchall()
         ]
         
-        # Calculate berth type statistics
         berth_types = {'container': 0, 'bulk': 0, 'tanker': 0, 'passenger': 0, 'multipurpose': 0}
         berth_statuses = {'active': 0, 'maintenance': 0, 'occupied': 0, 'inactive': 0}
         
@@ -68,14 +62,12 @@ def port_details(request, port_id):
             if berth['status'] in berth_statuses:
                 berth_statuses[berth['status']] += 1
         
-        # Track whether we have berths of each type
         has_container_berths = berth_types['container'] > 0
         has_bulk_berths = berth_types['bulk'] > 0
         has_tanker_berths = berth_types['tanker'] > 0
         has_passenger_berths = berth_types['passenger'] > 0
         has_multipurpose_berths = berth_types['multipurpose'] > 0
         
-        # Count available berths (active status)
         available_berths_count = berth_statuses['active']
     
     context = {

@@ -68,7 +68,7 @@
 </body>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-    const map = L.map('map').setView([20.5937, 78.9629], 4);  // Center on India
+    const map = L.map('map').setView([20.5937, 78.9629], 4);
     const locationField = document.getElementById('location');
     const countryField = document.getElementById('country');
 
@@ -89,15 +89,15 @@
         marker = L.marker(e.latlng).addTo(map);
       }
 
-      // Fetch country using reverse geocoding
+
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
         .then(response => response.json())
         
         .then(data => {
-            console.log(data); // For debugging purposes
+            console.log(data); 
           const country = data.address?.country || '';
           countryField.value = country;
-          console.log('Country:', country); // For debugging purposes
+          console.log('Country:', country);
           if (!country) {
             console.error('Country not found for the given coordinates.');
             countryField.value = 'Unknown';
