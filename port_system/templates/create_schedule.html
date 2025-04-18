@@ -669,7 +669,7 @@ function checkBerthAvailability(portType) {
     const endInput = document.getElementById(`${portType}BerthEnd`);
     
     if (!berthSelect.value || !startInput.value || !endInput.value) {
-        return;
+        return; 
     }
     
     const berthId = berthSelect.value;
@@ -741,12 +741,15 @@ function checkBerthAvailability(portType) {
 }
 
 function validateBerthTimes() {
+
     const originStart = new Date(document.getElementById('originBerthStart').value);
     const originEnd = new Date(document.getElementById('originBerthEnd').value);
     
+
     const destinationStart = new Date(document.getElementById('destinationBerthStart').value);
     const destinationEnd = new Date(document.getElementById('destinationBerthEnd').value);
     
+
     let isValid = true;
     let errorMessages = [];
     
@@ -760,12 +763,14 @@ function validateBerthTimes() {
         errorMessages.push("Destination berth booking: Start time must be earlier than end time");
     }
     
+
     if (!isValid) {
         alert("Please correct the following errors:\n- " + errorMessages.join("\n- "));
     }
     
     return isValid;
 }
+
 
 document.getElementById('scheduleForm').addEventListener('submit', function(event) {
     if (!validateBerthTimes()) {

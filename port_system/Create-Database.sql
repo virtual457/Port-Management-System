@@ -39,8 +39,8 @@ CREATE TABLE user_roles (
     user_id INT,
     role_id INT,
     PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE on update cascade
 );
 
 DELIMITER //
@@ -280,7 +280,7 @@ CREATE TABLE cargo (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE on update cascade
 );
 
 -- Use the port database
@@ -367,8 +367,8 @@ CREATE TABLE ships (
     owner_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (current_port_id) REFERENCES ports(port_id),
-    FOREIGN KEY (owner_id) REFERENCES users(user_id)
+    FOREIGN KEY (current_port_id) REFERENCES ports(port_id) on delete cascade on update cascade,
+    FOREIGN KEY (owner_id) REFERENCES users(user_id) on delete cascade on update cascade
 );
 
 -- Table for routes
@@ -390,10 +390,10 @@ CREATE TABLE routes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id),
-    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id),
-    FOREIGN KEY (owner_id) REFERENCES users(user_id),
-    FOREIGN KEY (ship_id) REFERENCES ships(ship_id),
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id) on delete cascade on update cascade,
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id) on delete cascade on update cascade,
+    FOREIGN KEY (owner_id) REFERENCES users(user_id) on delete cascade on update cascade,
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) on delete cascade on update cascade,
     
     CONSTRAINT different_ports CHECK (origin_port_id != destination_port_id),
     CONSTRAINT positive_distance CHECK (distance > 0),
@@ -419,8 +419,8 @@ CREATE TABLE schedules (
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE,
-    FOREIGN KEY (route_id) REFERENCES routes(route_id) ON DELETE CASCADE,
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (route_id) REFERENCES routes(route_id) ON DELETE CASCADE on update cascade,
     CONSTRAINT valid_dates CHECK (arrival_date > departure_date)
 );
 
@@ -438,7 +438,7 @@ CREATE TABLE berths (
     status VARCHAR(20) NOT NULL DEFAULT 'active',  -- Changed from ENUM to VARCHAR
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (port_id) REFERENCES ports(port_id) ON DELETE CASCADE
+    FOREIGN KEY (port_id) REFERENCES ports(port_id) ON DELETE CASCADE on update cascade
 );
 
 -- Create berth assignments table
@@ -453,9 +453,9 @@ CREATE TABLE berth_assignments (
     status ENUM('scheduled', 'current', 'completed', 'cancelled') NOT NULL DEFAULT 'scheduled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (berth_id) REFERENCES berths(berth_id) ON DELETE CASCADE,
-    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE,
-    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE
+    FOREIGN KEY (berth_id) REFERENCES berths(berth_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE on update cascade
 );
 
 -- Add some sample data for berths
@@ -543,10 +543,10 @@ CREATE TABLE connected_bookings (
     payment_status ENUM('unpaid', 'paid', 'refunded') NOT NULL DEFAULT 'unpaid',
     total_price DECIMAL(12, 2) NOT NULL,
     notes TEXT,
-    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id),
-    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id),
-    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id)
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) on delete cascade on update cascade,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) on delete cascade on update cascade,
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id) on delete cascade on update cascade,
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id) on delete cascade on update cascade
 );
 
 CREATE TABLE connected_booking_segments (
@@ -555,8 +555,8 @@ CREATE TABLE connected_booking_segments (
     schedule_id INT NOT NULL,
     segment_order INT NOT NULL,
     segment_price DECIMAL(12, 2) NOT NULL,
-    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id),
-    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id)
+    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id) on delete cascade on update cascade,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) on delete cascade on update cascade
 );
 
 USE port;
@@ -826,9 +826,9 @@ CREATE TABLE IF NOT EXISTS cargo_bookings (
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE,
-    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE on update cascade
 );
 
 -- Create indexes for better performance
@@ -851,10 +851,10 @@ CREATE TABLE IF NOT EXISTS connected_bookings (
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id) ON DELETE CASCADE,
-    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id) ON DELETE CASCADE
+    FOREIGN KEY (cargo_id) REFERENCES cargo(cargo_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (origin_port_id) REFERENCES ports(port_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (destination_port_id) REFERENCES ports(port_id) ON DELETE CASCADE on update cascade
 );
 
 -- Create indexes for connected_bookings
@@ -871,8 +871,8 @@ CREATE TABLE IF NOT EXISTS connected_booking_segments (
     segment_price DECIMAL(12, 2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id) ON DELETE CASCADE,
-    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE
+    FOREIGN KEY (connected_booking_id) REFERENCES connected_bookings(connected_booking_id) ON DELETE CASCADE on update cascade,
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE on update cascade
 );
 
 -- Create indexes for connected_booking_segments
@@ -1290,11 +1290,11 @@ CREATE TABLE berth_assignments (
 
 ALTER TABLE berth_assignments
 ADD CONSTRAINT fk_berth
-    FOREIGN KEY (berth_id) REFERENCES berths(berth_id) ON DELETE CASCADE,
+    FOREIGN KEY (berth_id) REFERENCES berths(berth_id) ON DELETE CASCADE on update cascade,
 ADD CONSTRAINT fk_ship
-    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE,
+    FOREIGN KEY (ship_id) REFERENCES ships(ship_id) ON DELETE CASCADE on update cascade,
 ADD CONSTRAINT fk_schedule
-    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE;
+    FOREIGN KEY (schedule_id) REFERENCES schedules(schedule_id) ON DELETE CASCADE on update cascade;
 
 
 ALTER TABLE berth_assignments
@@ -4615,3 +4615,1192 @@ CALL delete_berth(77, @p_success, @p_message);
 SELECT @p_success AS success, @p_message AS message;
 
 
+
+-- Procedure to get filtered schedule data
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_schedule_data //
+
+CREATE PROCEDURE get_schedule_data(
+    IN p_user_id INT,
+    IN p_ship_name VARCHAR(100),
+    IN p_port_name VARCHAR(100),
+    IN p_status VARCHAR(20),
+    IN p_date_from VARCHAR(20),
+    IN p_date_to VARCHAR(20),
+    IN p_berth_number VARCHAR(20)
+)
+BEGIN
+    -- Base query joins the necessary tables and includes berth information
+    SELECT 
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        s.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        s.status,
+        s.max_cargo,
+        s.notes,
+        origin_ba.berth_id AS origin_berth_id,
+        ob.berth_number AS origin_berth_number,
+        ob.type AS origin_berth_type,
+        origin_ba.arrival_time AS origin_berth_start,
+        origin_ba.departure_time AS origin_berth_end,
+        dest_ba.berth_id AS destination_berth_id,
+        db.berth_number AS destination_berth_number,
+        db.type AS destination_berth_type,
+        dest_ba.arrival_time AS destination_berth_start,
+        dest_ba.departure_time AS destination_berth_end
+    FROM 
+        schedules s
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    -- Left join to origin berth assignment
+    LEFT JOIN 
+        (SELECT ba.berth_id, ba.schedule_id, ba.arrival_time, ba.departure_time
+         FROM berth_assignments ba
+         JOIN berths b ON ba.berth_id = b.berth_id
+         JOIN ports p ON b.port_id = p.port_id
+         WHERE ba.status = 'active') AS origin_ba 
+    ON s.schedule_id = origin_ba.schedule_id
+    -- Left join to origin berth
+    LEFT JOIN 
+        berths ob ON origin_ba.berth_id = ob.berth_id
+    -- Left join to destination berth assignment
+    LEFT JOIN 
+        (SELECT ba.berth_id, ba.schedule_id, ba.arrival_time, ba.departure_time
+         FROM berth_assignments ba
+         JOIN berths b ON ba.berth_id = b.berth_id
+         JOIN ports p ON b.port_id = p.port_id
+         WHERE ba.status = 'active') AS dest_ba 
+    ON s.schedule_id = dest_ba.schedule_id
+    -- Left join to destination berth
+    LEFT JOIN 
+        berths db ON dest_ba.berth_id = db.berth_id
+    WHERE 
+        ships.owner_id = p_user_id
+        -- Apply filters if provided
+        AND (p_ship_name = '' OR ships.name LIKE CONCAT('%', p_ship_name, '%'))
+        AND (p_port_name = '' OR op.name LIKE CONCAT('%', p_port_name, '%') OR dp.name LIKE CONCAT('%', p_port_name, '%'))
+        AND (p_status = '' OR s.status = p_status)
+        AND (p_date_from = '' OR (s.departure_date >= STR_TO_DATE(p_date_from, '%Y-%m-%d') OR s.arrival_date >= STR_TO_DATE(p_date_from, '%Y-%m-%d')))
+        AND (p_date_to = '' OR (s.departure_date <= STR_TO_DATE(p_date_to, '%Y-%m-%d 23:59:59') OR s.arrival_date <= STR_TO_DATE(p_date_to, '%Y-%m-%d 23:59:59')))
+        AND (p_berth_number = '' OR (ob.berth_number LIKE CONCAT('%', p_berth_number, '%') OR db.berth_number LIKE CONCAT('%', p_berth_number, '%')))
+    GROUP BY 
+        s.schedule_id
+    ORDER BY 
+        s.departure_date DESC;
+END//
+
+-- Procedure to get schedule status counts
+DROP PROCEDURE IF EXISTS get_schedule_status_counts //
+
+CREATE PROCEDURE get_schedule_status_counts(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT 
+        s.status, 
+        COUNT(*) AS count
+    FROM 
+        schedules s
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    WHERE 
+        ships.owner_id = p_user_id
+    GROUP BY 
+        s.status;
+END//
+
+-- Procedure to update schedule status
+DROP PROCEDURE IF EXISTS update_schedule_status_proc //
+
+CREATE PROCEDURE update_schedule_status_proc(
+    IN p_schedule_id INT,
+    IN p_new_status VARCHAR(20),
+    IN p_reason TEXT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ship_id INT;
+    DECLARE v_owner_id INT;
+    DECLARE v_old_status VARCHAR(20);
+    DECLARE v_log_table_exists INT;
+    
+    -- Start transaction to ensure data consistency
+    START TRANSACTION;
+    
+    -- Check if the schedule exists and belongs to the user
+    SELECT s.ship_id, ships.owner_id, s.status
+    INTO v_ship_id, v_owner_id, v_old_status
+    FROM schedules s
+    JOIN ships ON s.ship_id = ships.ship_id
+    WHERE s.schedule_id = p_schedule_id
+    FOR UPDATE;
+    
+    -- Validate ownership and existence
+    IF v_ship_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Schedule not found';
+        ROLLBACK;
+    ELSEIF v_owner_id != p_user_id THEN
+        SET p_success = FALSE;
+        SET p_message = 'You do not have permission to update this schedule';
+        ROLLBACK;
+    ELSEIF v_old_status = p_new_status THEN
+        SET p_success = FALSE;
+        SET p_message = CONCAT('Schedule is already in ', p_new_status, ' status');
+        ROLLBACK;
+    ELSE
+        -- Update schedule status
+        UPDATE schedules 
+        SET status = p_new_status, 
+            updated_at = NOW()
+        WHERE schedule_id = p_schedule_id;
+        
+        -- Check if logs table exists
+        SELECT COUNT(*) INTO v_log_table_exists
+        FROM information_schema.tables 
+        WHERE table_schema = DATABASE() 
+        AND table_name = 'schedule_status_logs';
+        
+        -- If logs table exists, log the status change
+        IF v_log_table_exists > 0 THEN
+            INSERT INTO schedule_status_logs 
+            (schedule_id, old_status, new_status, reason, changed_by, changed_at)
+            VALUES (p_schedule_id, v_old_status, p_new_status, p_reason, p_user_id, NOW());
+        END IF;
+        
+        -- Handle status-specific actions
+        IF p_new_status = 'in_progress' THEN
+            -- Update berth assignments for origin port
+            UPDATE berth_assignments ba
+            JOIN berths b ON ba.berth_id = b.berth_id
+            JOIN schedules s ON ba.schedule_id = s.schedule_id
+            JOIN routes r ON s.route_id = r.route_id
+            JOIN ports p ON b.port_id = p.port_id
+            SET ba.status = 'inactive',
+                b.status = CASE WHEN b.status = 'occupied' THEN 'active' ELSE b.status END
+            WHERE ba.schedule_id = p_schedule_id
+            AND p.port_id = r.origin_port_id;
+            
+            -- Update ship status to in_transit
+            UPDATE ships
+            SET status = 'in_transit',
+                current_port_id = NULL,
+                updated_at = NOW()
+            WHERE ship_id = v_ship_id;
+            
+        ELSEIF p_new_status = 'completed' THEN
+            -- Update berth assignments for destination port
+            UPDATE berth_assignments ba
+            JOIN berths b ON ba.berth_id = b.berth_id
+            JOIN schedules s ON ba.schedule_id = s.schedule_id
+            JOIN routes r ON s.route_id = r.route_id
+            JOIN ports p ON b.port_id = p.port_id
+            SET ba.status = 'inactive',
+                b.status = CASE WHEN b.status = 'occupied' THEN 'active' ELSE b.status END
+            WHERE ba.schedule_id = p_schedule_id
+            AND p.port_id = r.destination_port_id;
+            
+            -- Update ship status to docked at destination port
+            UPDATE ships sh
+            JOIN schedules s ON sh.ship_id = s.ship_id
+            JOIN routes r ON s.route_id = r.route_id
+            SET sh.status = 'docked',
+                sh.current_port_id = r.destination_port_id,
+                sh.updated_at = NOW()
+            WHERE sh.ship_id = v_ship_id
+            AND s.schedule_id = p_schedule_id;
+            
+        ELSEIF p_new_status = 'cancelled' THEN
+            -- Free up all berth assignments
+            UPDATE berth_assignments ba
+            JOIN berths b ON ba.berth_id = b.berth_id
+            SET ba.status = 'inactive',
+                b.status = CASE WHEN b.status IN ('occupied', 'reserved') THEN 'active' ELSE b.status END
+            WHERE ba.schedule_id = p_schedule_id;
+        END IF;
+        
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Schedule status updated from ', v_old_status, ' to ', p_new_status);
+        COMMIT;
+    END IF;
+END//
+
+-- Procedure to delete a schedule
+DROP PROCEDURE IF EXISTS delete_schedule_proc //
+
+CREATE PROCEDURE delete_schedule_proc(
+    IN p_schedule_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_ship_name VARCHAR(100);
+    
+    -- Start transaction
+    START TRANSACTION;
+    
+    -- Get schedule info
+    SELECT s.status, ships.name 
+    INTO v_status, v_ship_name
+    FROM schedules s
+    JOIN ships ON s.ship_id = ships.ship_id
+    WHERE s.schedule_id = p_schedule_id;
+    
+    -- Check if schedule exists
+    IF v_status IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Schedule not found';
+        ROLLBACK;
+    ELSE
+        -- Free up any berth assignments if not completed
+        IF v_status != 'completed' THEN
+            UPDATE berth_assignments ba
+            JOIN berths b ON ba.berth_id = b.berth_id
+            SET ba.status = 'inactive',
+                b.status = CASE WHEN b.status IN ('occupied', 'reserved') THEN 'active' ELSE b.status END
+            WHERE ba.schedule_id = p_schedule_id
+            AND ba.status = 'active';
+        END IF;
+        
+        -- Delete the berth assignments
+        DELETE FROM berth_assignments 
+        WHERE schedule_id = p_schedule_id;
+        
+        -- Delete the schedule
+        DELETE FROM schedules 
+        WHERE schedule_id = p_schedule_id;
+        
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Schedule for ship "', v_ship_name, '" has been deleted successfully');
+        COMMIT;
+    END IF;
+END//
+
+-- Procedure to get available berths for a given port and time period
+DROP PROCEDURE IF EXISTS get_available_berths //
+
+CREATE PROCEDURE get_available_berths(
+    IN p_port_id INT,
+    IN p_start_time DATETIME,
+    IN p_end_time DATETIME
+)
+BEGIN
+    -- Get all berths from the specified port that are:
+    -- 1. Marked as active
+    -- 2. Not already booked during the requested time period
+    SELECT 
+        b.berth_id,
+        b.berth_number,
+        b.type,
+        b.length,
+        b.width,
+        b.depth,
+        b.status
+    FROM 
+        berths b
+    WHERE 
+        b.port_id = p_port_id
+        AND b.status = 'active'
+        AND NOT EXISTS (
+            -- Check for overlapping berth assignments
+            SELECT 1
+            FROM berth_assignments ba
+            WHERE ba.berth_id = b.berth_id
+              AND ba.status = 'active'
+              AND (
+                  -- New booking starts during existing booking
+                  (p_start_time BETWEEN ba.arrival_time AND ba.departure_time)
+                  -- New booking ends during existing booking
+                  OR (p_end_time BETWEEN ba.arrival_time AND ba.departure_time)
+                  -- New booking completely contains existing booking
+                  OR (p_start_time <= ba.arrival_time AND p_end_time >= ba.departure_time)
+              )
+        )
+    ORDER BY 
+        b.berth_number;
+END//
+
+
+DELIMITER //
+-- Procedure to create a new schedule with berth assignments
+DROP PROCEDURE IF EXISTS create_schedule_with_berths //
+
+CREATE PROCEDURE create_schedule_with_berths(
+    IN p_ship_id INT,
+    IN p_route_id INT,
+    IN p_max_cargo DECIMAL(12, 2),
+    IN p_status VARCHAR(20),
+    IN p_notes TEXT,
+    IN p_departure_date DATETIME,
+    IN p_arrival_date DATETIME,
+    IN p_origin_berth_id INT,
+    IN p_origin_berth_start DATETIME,
+    IN p_origin_berth_end DATETIME,
+    IN p_destination_berth_id INT,
+    IN p_destination_berth_start DATETIME,
+    IN p_destination_berth_end DATETIME,
+    OUT p_schedule_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ship_name VARCHAR(100);
+    DECLARE v_origin_port_id INT;
+    DECLARE v_destination_port_id INT;
+    DECLARE v_origin_available BOOLEAN DEFAULT TRUE;
+    DECLARE v_destination_available BOOLEAN DEFAULT TRUE;
+    DECLARE v_origin_conflict VARCHAR(255);
+    DECLARE v_destination_conflict VARCHAR(255);
+    
+    -- Start transaction
+    START TRANSACTION;
+    
+    -- Get ship name for messages
+    SELECT name INTO v_ship_name 
+    FROM ships 
+    WHERE ship_id = p_ship_id;
+    
+    -- Get origin and destination port ids from route
+    SELECT origin_port_id, destination_port_id 
+    INTO v_origin_port_id, v_destination_port_id
+    FROM routes
+    WHERE route_id = p_route_id;
+    
+    -- Validate inputs
+    IF v_ship_name IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Ship not found';
+        ROLLBACK;
+    ELSEIF p_departure_date IS NULL OR p_arrival_date IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Departure and arrival dates are required';
+        ROLLBACK;
+    ELSEIF p_departure_date >= p_arrival_date THEN
+        SET p_success = FALSE;
+        SET p_message = 'Departure date must be before arrival date';
+        ROLLBACK;
+    ELSEIF v_origin_port_id IS NULL OR v_destination_port_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Invalid route selected';
+        ROLLBACK;
+    ELSE
+        -- Check berth availability if berths are provided
+        IF p_origin_berth_id IS NOT NULL AND p_origin_berth_start IS NOT NULL AND p_origin_berth_end IS NOT NULL THEN
+            -- Verify berth is in the origin port
+            SELECT COUNT(*) = 1 INTO v_origin_available
+            FROM berths b
+            WHERE b.berth_id = p_origin_berth_id 
+            AND b.port_id = v_origin_port_id
+            AND b.status = 'active';
+            
+            IF NOT v_origin_available THEN
+                SET v_origin_conflict = 'Selected origin berth is not available in the origin port';
+            ELSE
+                -- Check for booking conflicts
+                SELECT NOT EXISTS (
+                    SELECT 1
+                    FROM berth_assignments ba
+                    WHERE ba.berth_id = p_origin_berth_id
+                      AND ba.status = 'active'
+                      AND (
+                          (p_origin_berth_start BETWEEN ba.arrival_time AND ba.departure_time)
+                          OR (p_origin_berth_end BETWEEN ba.arrival_time AND ba.departure_time)
+                          OR (p_origin_berth_start <= ba.arrival_time AND p_origin_berth_end >= ba.departure_time)
+                      )
+                ) INTO v_origin_available;
+                
+                IF NOT v_origin_available THEN
+                    SET v_origin_conflict = 'Origin berth has conflicting bookings for the selected time period';
+                END IF;
+            END IF;
+        END IF;
+        
+        IF p_destination_berth_id IS NOT NULL AND p_destination_berth_start IS NOT NULL AND p_destination_berth_end IS NOT NULL THEN
+            -- Verify berth is in the destination port
+            SELECT COUNT(*) = 1 INTO v_destination_available
+            FROM berths b
+            WHERE b.berth_id = p_destination_berth_id 
+            AND b.port_id = v_destination_port_id
+            AND b.status = 'active';
+            
+            IF NOT v_destination_available THEN
+                SET v_destination_conflict = 'Selected destination berth is not available in the destination port';
+            ELSE
+                -- Check for booking conflicts
+                SELECT NOT EXISTS (
+                    SELECT 1
+                    FROM berth_assignments ba
+                    WHERE ba.berth_id = p_destination_berth_id
+                      AND ba.status = 'active'
+                      AND (
+                          (p_destination_berth_start BETWEEN ba.arrival_time AND ba.departure_time)
+                          OR (p_destination_berth_end BETWEEN ba.arrival_time AND ba.departure_time)
+                          OR (p_destination_berth_start <= ba.arrival_time AND p_destination_berth_end >= ba.departure_time)
+                      )
+                ) INTO v_destination_available;
+                
+                IF NOT v_destination_available THEN
+                    SET v_destination_conflict = 'Destination berth has conflicting bookings for the selected time period';
+                END IF;
+            END IF;
+        END IF;
+        
+        -- If berths aren't available, return error message
+        IF (p_origin_berth_id IS NOT NULL AND NOT v_origin_available) THEN
+            SET p_success = FALSE;
+            SET p_message = v_origin_conflict;
+            ROLLBACK;
+        ELSEIF (p_destination_berth_id IS NOT NULL AND NOT v_destination_available) THEN
+            SET p_success = FALSE;
+            SET p_message = v_destination_conflict;
+            ROLLBACK;
+        ELSE
+            -- Create the schedule
+            INSERT INTO schedules (
+                ship_id, 
+                route_id, 
+                departure_date, 
+                arrival_date, 
+                status, 
+                max_cargo, 
+                notes,
+                created_at,
+                updated_at
+            ) VALUES (
+                p_ship_id,
+                p_route_id,
+                p_departure_date,
+                p_arrival_date,
+                p_status,
+                p_max_cargo,
+                p_notes,
+                NOW(),
+                NOW()
+            );
+            
+            -- Get the new schedule ID
+            SET p_schedule_id = LAST_INSERT_ID();
+            
+            -- Create berth assignments if provided
+            IF p_origin_berth_id IS NOT NULL AND p_origin_berth_start IS NOT NULL AND p_origin_berth_end IS NOT NULL THEN
+                INSERT INTO berth_assignments (
+                    berth_id,
+                    ship_id,
+                    schedule_id,
+                    arrival_time,
+                    departure_time,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    p_origin_berth_id,
+                    p_ship_id,
+                    p_schedule_id,
+                    p_origin_berth_start,
+                    p_origin_berth_end,
+                    'active',
+                    NOW(),
+                    NOW()
+                );
+                
+            
+            END IF;
+            
+            IF p_destination_berth_id IS NOT NULL AND p_destination_berth_start IS NOT NULL AND p_destination_berth_end IS NOT NULL THEN
+                INSERT INTO berth_assignments (
+                    berth_id,
+                    ship_id,
+                    schedule_id,
+                    arrival_time,
+                    departure_time,
+                    status,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    p_destination_berth_id,
+                    p_ship_id,
+                    p_schedule_id,
+                    p_destination_berth_start,
+                    p_destination_berth_end,
+                    'active',
+                    NOW(),
+                    NOW()
+                );
+
+            END IF;
+            
+            SET p_success = TRUE;
+            SET p_message = CONCAT('Schedule created successfully for ship "', v_ship_name, '"');
+            COMMIT;
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_schedule_data //
+
+CREATE PROCEDURE get_schedule_data(
+    IN p_user_id INT,
+    IN p_ship_name VARCHAR(100),
+    IN p_port_name VARCHAR(100),
+    IN p_status VARCHAR(20),
+    IN p_date_from VARCHAR(20),
+    IN p_date_to VARCHAR(20),
+    IN p_berth_number VARCHAR(20)
+)
+BEGIN
+    -- Base query joins the necessary tables and includes berth information
+    SELECT 
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        s.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        s.status,
+        s.max_cargo,
+        s.notes,
+        -- Use MAX() for non-aggregated columns to make them functionally dependent on GROUP BY
+        MAX(origin_ba.berth_id) AS origin_berth_id,
+        MAX(ob.berth_number) AS origin_berth_number,
+        MAX(ob.type) AS origin_berth_type,
+        MAX(origin_ba.arrival_time) AS origin_berth_start,
+        MAX(origin_ba.departure_time) AS origin_berth_end,
+        MAX(dest_ba.berth_id) AS destination_berth_id,
+        MAX(db.berth_number) AS destination_berth_number,
+        MAX(db.type) AS destination_berth_type,
+        MAX(dest_ba.arrival_time) AS destination_berth_start,
+        MAX(dest_ba.departure_time) AS destination_berth_end
+    FROM 
+        schedules s
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    -- Left join to origin berth assignment
+    LEFT JOIN 
+        (SELECT ba.berth_id, ba.schedule_id, ba.arrival_time, ba.departure_time
+         FROM berth_assignments ba
+         JOIN berths b ON ba.berth_id = b.berth_id
+         JOIN ports p ON b.port_id = p.port_id
+         JOIN routes rt ON p.port_id = rt.origin_port_id
+         JOIN schedules sc ON rt.route_id = sc.route_id AND ba.schedule_id = sc.schedule_id
+         WHERE ba.status = 'active') AS origin_ba 
+    ON s.schedule_id = origin_ba.schedule_id
+    -- Left join to origin berth
+    LEFT JOIN 
+        berths ob ON origin_ba.berth_id = ob.berth_id
+    -- Left join to destination berth assignment
+    LEFT JOIN 
+        (SELECT ba.berth_id, ba.schedule_id, ba.arrival_time, ba.departure_time
+         FROM berth_assignments ba
+         JOIN berths b ON ba.berth_id = b.berth_id
+         JOIN ports p ON b.port_id = p.port_id
+         JOIN routes rt ON p.port_id = rt.destination_port_id
+         JOIN schedules sc ON rt.route_id = sc.route_id AND ba.schedule_id = sc.schedule_id
+         WHERE ba.status = 'active') AS dest_ba 
+    ON s.schedule_id = dest_ba.schedule_id
+    -- Left join to destination berth
+    LEFT JOIN 
+        berths db ON dest_ba.berth_id = db.berth_id
+    WHERE 
+        ships.owner_id = p_user_id
+        -- Apply filters if provided
+        AND (p_ship_name = '' OR ships.name LIKE CONCAT('%', p_ship_name, '%'))
+        AND (p_port_name = '' OR op.name LIKE CONCAT('%', p_port_name, '%') OR dp.name LIKE CONCAT('%', p_port_name, '%'))
+        AND (p_status = '' OR s.status = p_status)
+        AND (p_date_from = '' OR (s.departure_date >= STR_TO_DATE(p_date_from, '%Y-%m-%d') OR s.arrival_date >= STR_TO_DATE(p_date_from, '%Y-%m-%d')))
+        AND (p_date_to = '' OR (s.departure_date <= STR_TO_DATE(p_date_to, '%Y-%m-%d 23:59:59') OR s.arrival_date <= STR_TO_DATE(p_date_to, '%Y-%m-%d 23:59:59')))
+        AND (p_berth_number = '' OR (ob.berth_number LIKE CONCAT('%', p_berth_number, '%') OR db.berth_number LIKE CONCAT('%', p_berth_number, '%')))
+    GROUP BY 
+        s.schedule_id, s.ship_id, ships.name, ships.ship_type, s.route_id, 
+        r.name, op.name, dp.name, s.departure_date, s.arrival_date, 
+        s.status, s.max_cargo, s.notes
+    ORDER BY 
+        s.departure_date DESC;
+END//
+
+DELIMITER ;
+
+
+
+-- Procedure to get filtered schedules with berth information
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_filtered_schedules //
+
+CREATE PROCEDURE get_filtered_schedules(
+    IN p_user_id INT,
+    IN p_ship_name VARCHAR(100),
+    IN p_port_name VARCHAR(100),
+    IN p_status VARCHAR(20),
+    IN p_date_from VARCHAR(20),
+    IN p_date_to VARCHAR(20),
+    IN p_berth_number VARCHAR(20)
+)
+BEGIN
+    -- Build the base query with proper JOIN to berth_assignments
+    SET @base_query = '
+        SELECT 
+            s.schedule_id,
+            s.ship_id,
+            ships.name AS ship_name,
+            ships.ship_type AS ship_type,
+            s.route_id,
+            r.name AS route_name,
+            op.name AS origin_port,
+            dp.name AS destination_port,
+            s.departure_date,
+            s.arrival_date,
+            s.status,
+            s.max_cargo,
+            s.notes,
+            origin_ba.berth_id AS origin_berth_id,
+            ob.berth_number AS origin_berth_number,
+            ob.type AS origin_berth_type,
+            origin_ba.arrival_time AS origin_berth_start,
+            origin_ba.departure_time AS origin_berth_end,
+            dest_ba.berth_id AS destination_berth_id,
+            db.berth_number AS destination_berth_number,
+            db.type AS destination_berth_type,
+            dest_ba.arrival_time AS destination_berth_start,
+            dest_ba.departure_time AS destination_berth_end
+        FROM 
+            schedules s
+        JOIN 
+            ships ON s.ship_id = ships.ship_id
+        JOIN 
+            routes r ON s.route_id = r.route_id
+        JOIN 
+            ports op ON r.origin_port_id = op.port_id
+        JOIN 
+            ports dp ON r.destination_port_id = dp.port_id
+        LEFT JOIN 
+            berth_assignments origin_ba ON 
+                s.schedule_id = origin_ba.schedule_id AND 
+                origin_ba.status = "active" AND
+                EXISTS (
+                    SELECT 1 FROM berths b 
+                    JOIN ports p ON b.port_id = p.port_id
+                    WHERE b.berth_id = origin_ba.berth_id 
+                    AND p.port_id = r.origin_port_id
+                )
+        LEFT JOIN 
+            berths ob ON origin_ba.berth_id = ob.berth_id
+        LEFT JOIN 
+            berth_assignments dest_ba ON 
+                s.schedule_id = dest_ba.schedule_id AND 
+                dest_ba.status = "active" AND
+                EXISTS (
+                    SELECT 1 FROM berths b 
+                    JOIN ports p ON b.port_id = p.port_id
+                    WHERE b.berth_id = dest_ba.berth_id 
+                    AND p.port_id = r.destination_port_id
+                )
+        LEFT JOIN 
+            berths db ON dest_ba.berth_id = db.berth_id
+        WHERE 
+            ships.owner_id = ?
+    ';
+    
+    -- Initialize parameters array
+    SET @params = p_user_id;
+    
+    -- Add filters conditionally
+    IF p_ship_name IS NOT NULL AND p_ship_name != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND ships.name LIKE CONCAT("%", ?, "%")');
+        SET @params = CONCAT(@params, ',', QUOTE(p_ship_name));
+    END IF;
+    
+    IF p_port_name IS NOT NULL AND p_port_name != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND (op.name LIKE CONCAT("%", ?, "%") OR dp.name LIKE CONCAT("%", ?, "%"))');
+        SET @params = CONCAT(@params, ',', QUOTE(p_port_name), ',', QUOTE(p_port_name));
+    END IF;
+    
+    IF p_status IS NOT NULL AND p_status != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND s.status = ?');
+        SET @params = CONCAT(@params, ',', QUOTE(p_status));
+    END IF;
+    
+    IF p_date_from IS NOT NULL AND p_date_from != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND (s.departure_date >= ? OR s.arrival_date >= ?)');
+        SET @params = CONCAT(@params, ',', QUOTE(p_date_from), ',', QUOTE(p_date_from));
+    END IF;
+    
+    IF p_date_to IS NOT NULL AND p_date_to != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND (s.departure_date <= ? OR s.arrival_date <= ?)');
+        SET @params = CONCAT(@params, ',', QUOTE(p_date_to), ',', QUOTE(p_date_to));
+    END IF;
+    
+    IF p_berth_number IS NOT NULL AND p_berth_number != '' THEN
+        SET @base_query = CONCAT(@base_query, ' AND (ob.berth_number LIKE CONCAT("%", ?, "%") OR db.berth_number LIKE CONCAT("%", ?, "%"))');
+        SET @params = CONCAT(@params, ',', QUOTE(p_berth_number), ',', QUOTE(p_berth_number));
+    END IF;
+    
+    -- Add ordering
+    SET @base_query = CONCAT(@base_query, ' ORDER BY s.departure_date DESC');
+    
+    -- Prepare and execute the dynamic SQL
+    SET @sql = @base_query;
+    
+    PREPARE stmt FROM @sql;
+    
+    -- Convert the params string to variables for execution
+    SET @p1 = p_user_id;
+    SET @p_count = 1;
+    
+    IF p_ship_name IS NOT NULL AND p_ship_name != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_ship_name));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    IF p_port_name IS NOT NULL AND p_port_name != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_port_name));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+        
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_port_name));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    IF p_status IS NOT NULL AND p_status != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_status));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    IF p_date_from IS NOT NULL AND p_date_from != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_date_from));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+        
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_date_from));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    IF p_date_to IS NOT NULL AND p_date_to != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_date_to));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+        
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_date_to));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    IF p_berth_number IS NOT NULL AND p_berth_number != '' THEN
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_berth_number));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+        
+        SET @p_count = @p_count + 1;
+        SET @sql_set = CONCAT('SET @p', @p_count, ' = ', QUOTE(p_berth_number));
+        PREPARE set_stmt FROM @sql_set;
+        EXECUTE set_stmt;
+        DEALLOCATE PREPARE set_stmt;
+    END IF;
+    
+    -- Create the EXECUTE statement dynamically
+    SET @execute_str = 'EXECUTE stmt USING @p1';
+    
+    IF @p_count > 1 THEN
+        SET @counter = 2;
+        WHILE @counter <= @p_count DO
+            SET @execute_str = CONCAT(@execute_str, ', @p', @counter);
+            SET @counter = @counter + 1;
+        END WHILE;
+    END IF;
+    
+    -- Execute the dynamic EXECUTE statement
+    PREPARE exec_stmt FROM @execute_str;
+    EXECUTE exec_stmt;
+    
+    -- Cleanup
+    DEALLOCATE PREPARE stmt;
+    DEALLOCATE PREPARE exec_stmt;
+END//
+
+-- Procedure to get schedule status counts
+DROP PROCEDURE IF EXISTS get_schedule_status_counts //
+
+CREATE PROCEDURE get_schedule_status_counts(
+    IN p_user_id INT
+)
+BEGIN
+    SELECT s.status, COUNT(*) 
+    FROM schedules s
+    JOIN ships ON s.ship_id = ships.ship_id
+    WHERE ships.owner_id = p_user_id
+    GROUP BY s.status;
+END//
+
+-- Procedure to update schedule status with proper berth handling
+DROP PROCEDURE IF EXISTS update_schedule_status_proc //
+
+CREATE PROCEDURE update_schedule_status_proc(
+    IN p_schedule_id INT,
+    IN p_new_status VARCHAR(20),
+    IN p_reason TEXT,
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ship_id INT;
+    DECLARE v_owner_id INT;
+    DECLARE v_origin_berth_id INT;
+    DECLARE v_destination_berth_id INT;
+    DECLARE logs_table_exists INT;
+    
+    -- First, verify that the schedule belongs to the user's ships
+    SELECT s.ship_id, ships.owner_id 
+    INTO v_ship_id, v_owner_id
+    FROM schedules s
+    JOIN ships ON s.ship_id = ships.ship_id
+    WHERE s.schedule_id = p_schedule_id;
+    
+    IF v_owner_id IS NULL OR v_owner_id != p_user_id THEN
+        SET p_success = FALSE;
+        SET p_message = 'You do not have permission to update this schedule';
+    ELSE
+        -- Start transaction
+        START TRANSACTION;
+        
+        -- Get berth IDs from assignments
+        SELECT origin_ba.berth_id, dest_ba.berth_id
+        INTO v_origin_berth_id, v_destination_berth_id
+        FROM schedules s
+        JOIN routes r ON s.route_id = r.route_id
+        LEFT JOIN berth_assignments origin_ba ON 
+            s.schedule_id = origin_ba.schedule_id AND 
+            origin_ba.status = 'active' AND
+            EXISTS (
+                SELECT 1 FROM berths b 
+                JOIN ports p ON b.port_id = p.port_id
+                WHERE b.berth_id = origin_ba.berth_id 
+                AND p.port_id = r.origin_port_id
+            )
+        LEFT JOIN berth_assignments dest_ba ON 
+            s.schedule_id = dest_ba.schedule_id AND 
+            dest_ba.status = 'active' AND
+            EXISTS (
+                SELECT 1 FROM berths b 
+                JOIN ports p ON b.port_id = p.port_id
+                WHERE b.berth_id = dest_ba.berth_id 
+                AND p.port_id = r.destination_port_id
+            )
+        WHERE s.schedule_id = p_schedule_id;
+
+        -- Update schedule status
+        UPDATE schedules 
+        SET status = p_new_status 
+        WHERE schedule_id = p_schedule_id;
+
+        -- Check if the status logs table exists
+        SELECT COUNT(*) INTO logs_table_exists
+        FROM information_schema.tables 
+        WHERE table_schema = DATABASE() 
+        AND table_name = 'schedule_status_logs';
+        
+        -- Log status change if logs table exists
+        IF logs_table_exists > 0 THEN
+            INSERT INTO schedule_status_logs 
+            (schedule_id, old_status, new_status, reason, changed_by, changed_at)
+            SELECT s.schedule_id, s.status, p_new_status, p_reason, p_user_id, NOW()
+            FROM schedules s
+            WHERE s.schedule_id = p_schedule_id;
+        END IF;
+
+        -- Handle status-specific operations
+        IF p_new_status = 'completed' THEN
+            -- Update destination berth if assigned
+            IF v_destination_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_destination_berth_id AND status = 'occupied';
+                
+                -- Update berth assignment status
+                UPDATE berth_assignments
+                SET status = 'inactive'
+                WHERE berth_id = v_destination_berth_id 
+                AND schedule_id = p_schedule_id;
+            END IF;
+            
+            -- Update ship status
+            UPDATE ships 
+            SET status = 'docked', 
+                current_port_id = (
+                    SELECT r.destination_port_id 
+                    FROM schedules s
+                    JOIN routes r ON s.route_id = r.route_id
+                    WHERE s.schedule_id = p_schedule_id
+                )
+            WHERE ship_id = v_ship_id;
+            
+        ELSEIF p_new_status = 'in_progress' THEN
+            -- Update origin berth if assigned
+            IF v_origin_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_origin_berth_id AND status = 'occupied';
+                
+                -- Update berth assignment status
+                UPDATE berth_assignments
+                SET status = 'inactive'
+                WHERE berth_id = v_origin_berth_id 
+                AND schedule_id = p_schedule_id;
+            END IF;
+            
+            -- Update ship status
+            UPDATE ships 
+            SET status = 'in_transit', 
+                current_port_id = NULL
+            WHERE ship_id = v_ship_id;
+            
+        ELSEIF p_new_status = 'cancelled' THEN
+            -- Free both berths if assigned
+            IF v_origin_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_origin_berth_id AND status IN ('occupied', 'reserved');
+                
+                -- Update berth assignment status
+                UPDATE berth_assignments
+                SET status = 'inactive'
+                WHERE berth_id = v_origin_berth_id 
+                AND schedule_id = p_schedule_id;
+            END IF;
+            
+            IF v_destination_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_destination_berth_id AND status IN ('occupied', 'reserved');
+                
+                -- Update berth assignment status
+                UPDATE berth_assignments
+                SET status = 'inactive'
+                WHERE berth_id = v_destination_berth_id 
+                AND schedule_id = p_schedule_id;
+            END IF;
+        END IF;
+        
+        COMMIT;
+        
+        SET p_success = TRUE;
+        SET p_message = CONCAT('Schedule status updated to ', p_new_status);
+    END IF;
+END//
+
+-- Procedure to delete a schedule
+DROP PROCEDURE IF EXISTS delete_schedule_proc //
+
+CREATE PROCEDURE delete_schedule_proc(
+    IN p_schedule_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_ship_id INT;
+    DECLARE v_status VARCHAR(20);
+    DECLARE v_origin_berth_id INT;
+    DECLARE v_destination_berth_id INT;
+    
+    -- Get schedule details
+    SELECT ship_id, status
+    INTO v_ship_id, v_status
+    FROM schedules
+    WHERE schedule_id = p_schedule_id;
+    
+    IF v_ship_id IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'Schedule not found';
+    ELSE
+        -- Start transaction
+        START TRANSACTION;
+        
+        -- Get berth IDs from assignments
+        SELECT 
+            (SELECT berth_id FROM berth_assignments 
+             WHERE schedule_id = p_schedule_id AND berth_id IN (
+                 SELECT b.berth_id FROM berths b
+                 JOIN ports p ON b.port_id = p.port_id
+                 JOIN routes r ON p.port_id = r.origin_port_id
+                 WHERE r.route_id = (SELECT route_id FROM schedules WHERE schedule_id = p_schedule_id)
+             ) LIMIT 1) AS origin_berth_id,
+            (SELECT berth_id FROM berth_assignments 
+             WHERE schedule_id = p_schedule_id AND berth_id IN (
+                 SELECT b.berth_id FROM berths b
+                 JOIN ports p ON b.port_id = p.port_id
+                 JOIN routes r ON p.port_id = r.destination_port_id
+                 WHERE r.route_id = (SELECT route_id FROM schedules WHERE schedule_id = p_schedule_id)
+             ) LIMIT 1) AS destination_berth_id
+        INTO v_origin_berth_id, v_destination_berth_id;
+
+        -- If schedule is not completed, free up berths
+        IF v_status != 'completed' THEN
+            IF v_origin_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_origin_berth_id AND status IN ('reserved', 'occupied');
+            END IF;
+            
+            IF v_destination_berth_id IS NOT NULL THEN
+                UPDATE berths 
+                SET status = 'active'
+                WHERE berth_id = v_destination_berth_id AND status IN ('reserved', 'occupied');
+            END IF;
+        END IF;
+        
+        -- Delete berth assignments first
+        DELETE FROM berth_assignments WHERE schedule_id = p_schedule_id;
+        
+        -- Delete the schedule
+        DELETE FROM schedules WHERE schedule_id = p_schedule_id;
+        
+        COMMIT;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Schedule deleted successfully';
+    END IF;
+END//
+
+DELIMITER ;
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS get_schedule_data //
+
+CREATE PROCEDURE get_schedule_data(
+    IN p_user_id INT,
+    IN p_ship_name VARCHAR(100),
+    IN p_port_name VARCHAR(100),
+    IN p_status VARCHAR(20),
+    IN p_date_from VARCHAR(20),
+    IN p_date_to VARCHAR(20),
+    IN p_berth_number VARCHAR(20)
+)
+BEGIN
+    SET @ship_filter = CASE WHEN p_ship_name = '' THEN '' ELSE CONCAT('%', p_ship_name, '%') END;
+    SET @port_filter = CASE WHEN p_port_name = '' THEN '' ELSE CONCAT('%', p_port_name, '%') END;
+    SET @berth_filter = CASE WHEN p_berth_number = '' THEN '' ELSE CONCAT('%', p_berth_number, '%') END;
+    SET @date_from_filter = CASE WHEN p_date_from = '' THEN NULL ELSE STR_TO_DATE(p_date_from, '%Y-%m-%d') END;
+    SET @date_to_filter = CASE WHEN p_date_to = '' THEN NULL ELSE STR_TO_DATE(CONCAT(p_date_to, ' 23:59:59'), '%Y-%m-%d %H:%i:%s') END;
+
+    SELECT 
+        s.schedule_id,
+        s.ship_id,
+        ships.name AS ship_name,
+        ships.ship_type,
+        s.route_id,
+        r.name AS route_name,
+        op.name AS origin_port,
+        dp.name AS destination_port,
+        s.departure_date,
+        s.arrival_date,
+        s.status,
+        s.max_cargo,
+        s.notes,
+        MAX(origin_ba.berth_id) AS origin_berth_id,
+        MAX(ob.berth_number) AS origin_berth_number,
+        MAX(ob.type) AS origin_berth_type,
+        MAX(origin_ba.arrival_time) AS origin_berth_start,
+        MAX(origin_ba.departure_time) AS origin_berth_end,
+        MAX(dest_ba.berth_id) AS destination_berth_id,
+        MAX(db.berth_number) AS destination_berth_number,
+        MAX(db.type) AS destination_berth_type,
+        MAX(dest_ba.arrival_time) AS destination_berth_start,
+        MAX(dest_ba.departure_time) AS destination_berth_end
+    FROM 
+        schedules s
+    JOIN 
+        ships ON s.ship_id = ships.ship_id
+    JOIN 
+        routes r ON s.route_id = r.route_id
+    JOIN 
+        ports op ON r.origin_port_id = op.port_id
+    JOIN 
+        ports dp ON r.destination_port_id = dp.port_id
+    LEFT JOIN 
+        berth_assignments origin_ba ON s.schedule_id = origin_ba.schedule_id 
+        AND origin_ba.status = 'active'
+    LEFT JOIN 
+        berths ob ON origin_ba.berth_id = ob.berth_id AND ob.port_id = r.origin_port_id
+    LEFT JOIN 
+        berth_assignments dest_ba ON s.schedule_id = dest_ba.schedule_id 
+        AND dest_ba.status = 'active'
+    LEFT JOIN 
+        berths db ON dest_ba.berth_id = db.berth_id AND db.port_id = r.destination_port_id
+    WHERE 
+        ships.owner_id = p_user_id
+        AND (p_ship_name = '' OR ships.name LIKE @ship_filter)
+        AND (p_port_name = '' OR op.name LIKE @port_filter OR dp.name LIKE @port_filter)
+        AND (p_status = '' OR s.status = p_status)
+        AND (p_date_from = '' OR s.departure_date >= @date_from_filter OR s.arrival_date >= @date_from_filter)
+        AND (p_date_to = '' OR s.departure_date <= @date_to_filter OR s.arrival_date <= @date_to_filter)
+        AND (p_berth_number = '' OR ob.berth_number LIKE @berth_filter OR db.berth_number LIKE @berth_filter)
+    GROUP BY 
+        s.schedule_id, s.ship_id, ships.name, ships.ship_type, s.route_id, 
+        r.name, op.name, dp.name, s.departure_date, s.arrival_date, 
+        s.status, s.max_cargo, s.notes
+    ORDER BY 
+        s.departure_date DESC;
+END//
+
+DELIMITER ;
+
+
+
+select * from schedules where ship_id = 67;
+
+
+select * from ships;

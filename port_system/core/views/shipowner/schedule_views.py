@@ -6,6 +6,9 @@ import json
 from datetime import datetime
 
 def create_schedule_form(request):
+    """
+    View for displaying the schedule creation form
+    """
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT ship_id, name, ship_type, capacity, 
@@ -61,6 +64,9 @@ def create_schedule_form(request):
     return render(request, 'create_schedule.html', context)
 
 def create_schedule(request):
+    """
+    Handle the POST request for creating a new schedule with berth bookings
+    """
     if request.method != 'POST':
         return redirect('create-schedule-form')
     
@@ -106,6 +112,7 @@ def create_schedule(request):
         messages.error(request, f"Invalid date format: {str(e)}")
         return redirect('create-schedule-form')
     
+    print("calling create schedule with berths")
     with connection.cursor() as cursor:
         try:
             cursor.execute("SET @p_schedule_id = 0, @p_success = FALSE, @p_message = '';")
@@ -125,6 +132,9 @@ def create_schedule(request):
             
             cursor.execute('SELECT @p_schedule_id, @p_success, @p_message;')
             schedule_id, success, message = cursor.fetchone()
+            print("schedule_id", schedule_id)
+            print("success", success)
+            print("message", message)
             
             if success:
                 messages.success(request, message)
@@ -134,6 +144,8 @@ def create_schedule(request):
                 return redirect('create-schedule-form')
                 
         except Exception as e:
+            print(f"Error creating schedule: {str(e)}")
+            
             if "valid_assignment_times" in str(e):
                 messages.error(request, "Berth booking times are invalid: arrival time must be earlier than departure time")
             else:
@@ -142,6 +154,9 @@ def create_schedule(request):
             return redirect('create-schedule-form')
 
 def get_available_berths(request, port_id):
+    """
+    API endpoint to get available berths for a port
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Invalid request method'}, status=400)
     
@@ -181,8 +196,12 @@ def get_available_berths(request, port_id):
             
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    
 
 def check_berth_availability_ajax(request):
+    """
+    AJAX endpoint to check berth availability
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Invalid request method'}, status=400)
     
@@ -202,7 +221,9 @@ def check_berth_availability_ajax(request):
             pass
         
         with connection.cursor() as cursor:
+
             cursor.execute("SET @p_is_available = 0, @p_conflict_details = '';")
+
             cursor.execute(f"""
                 CALL check_berth_availability(
                 {berth_id}, 
@@ -212,14 +233,17 @@ def check_berth_availability_ajax(request):
                 @p_conflict_details
                 );
                 """)
-            
+
             cursor.execute("SELECT @p_is_available, @p_conflict_details;")
             is_available, conflict_details = cursor.fetchone()
-            
+
+            print("is_available", is_available)
+            print("conflict_details", conflict_details)
+
             return JsonResponse({
                 'is_available': bool(is_available),
-                'conflict_details': conflict_details if not bool(is_available) else ''
+                'message': conflict_details
             })
-            
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)

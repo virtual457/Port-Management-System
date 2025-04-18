@@ -1048,3 +1048,24 @@ select * from connected_bookings join cargo on connected_bookings.cargo_id = car
 select * from cargo where status = "completed";
 
 select * from roles;
+
+
+
+
+select * from schedules;
+
+select * from routes where route_id in (52,54,60,63);
+
+
+select * from schedules;
+
+select * from users where email like "%shipowner1%";
+
+
+SELECT r.route_id, r.name, op.name AS origin_port, 
+                   dp.name AS destination_port, r.distance, r.duration
+            FROM routes r
+            JOIN ports op ON r.origin_port_id = op.port_id
+            JOIN ports dp ON r.destination_port_id = dp.port_id
+            WHERE r.owner_id = 47 AND r.status = 'active'
+            ORDER BY r.name
