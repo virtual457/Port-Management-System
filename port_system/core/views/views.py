@@ -344,7 +344,12 @@ def admin_users_add(request):
 
 @role_required('admin')
 def admin_users_edit(request):
+    """
+    View function for editing a user.
+    Updates user information and roles using the edit_user stored procedure.
+    """
     if request.method == 'POST':
+        print(request.POST)
         user_id = request.POST.get('id')
         username = request.POST.get('username')
         email = request.POST.get('email')
@@ -361,40 +366,29 @@ def admin_users_edit(request):
         
         try:
             with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT user_id FROM users WHERE email = %s AND user_id != %s", 
-                    [email, user_id]
-                )
-                if cursor.fetchone():
-                    messages.error(request, f"Email '{email}' is already in use by another user.")
-                    return redirect('manage-users')
+                # Format roles as comma-separated string for the stored procedure
+                roles_str = ','.join(roles)
                 
+                # Prepare the password (hash it if provided)
                 if password and password.strip():
                     hashed_password = make_password(password)
-                    cursor.execute(
-                        "UPDATE users SET username = %s, email = %s, password = %s WHERE user_id = %s",
-                        [username, email, hashed_password, user_id]
-                    )
                 else:
-                    cursor.execute(
-                        "UPDATE users SET username = %s, email = %s WHERE user_id = %s",
-                        [username, email, user_id]
-                    )
+                    hashed_password = ''
                 
-                cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
+                # Call the stored procedure
+                cursor.execute("SET @p_success = NULL, @p_message = '';")
+                cursor.execute(
+                    "CALL edit_user(%s, %s, %s, %s, %s, @p_success, @p_message);", 
+                    [user_id, username, email, hashed_password, roles_str]
+                )
+                cursor.execute("SELECT @p_success, @p_message;")
+                result = cursor.fetchone()
+                success, message = result[0], result[1]
                 
-                for role in roles:
-                    cursor.execute("SELECT role_id FROM roles WHERE role_name = %s", [role])
-                    role_id_result = cursor.fetchone()
-                    
-                    if role_id_result:
-                        role_id = role_id_result[0]
-                        cursor.execute(
-                            "INSERT INTO user_roles (user_id, role_id) VALUES (%s, %s)",
-                            [user_id, role_id]
-                        )
-                
-            messages.success(request, f"User '{username}' updated successfully!")
+                if success:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
         except Exception as e:
             messages.error(request, f"Error updating user: {str(e)}")
         
@@ -406,7 +400,8 @@ def admin_users_edit(request):
 def admin_users_delete(request):
     """
     View function for deleting a user.
-    Removes user from the database.
+    Removes user from the database after checking for dependencies.
+    Uses the delete_user stored procedure.
     """
     if request.method == 'POST':
         user_id = request.POST.get('id')
@@ -415,23 +410,23 @@ def admin_users_delete(request):
             messages.error(request, "No user specified.")
             return redirect('manage-users')
         
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT username FROM users WHERE user_id = %s", [user_id])
-            result = cursor.fetchone()
-            username = result[0] if result else "Unknown user"
-        
         if int(user_id) == int(request.session.get('user_id', 0)):
             messages.error(request, "You cannot delete your own account.")
             return redirect('manage-users')
         
         try:
             with connection.cursor() as cursor:
-               
-                cursor.execute("DELETE FROM user_roles WHERE user_id = %s", [user_id])
+                # Call the stored procedure
+                cursor.execute("SET @p_success = 0, @p_message = '';")
+                cursor.execute("CALL delete_user(%s, @p_success, @p_message);", [user_id])
+                cursor.execute("SELECT @p_success, @p_message;")
+                result = cursor.fetchone()
+                success, message = result[0], result[1]
                 
-                cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id])
-                
-            messages.success(request, f"User '{username}' deleted successfully!")
+                if success:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
         except Exception as e:
             messages.error(request, f"Error deleting user: {str(e)}")
         

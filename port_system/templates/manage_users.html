@@ -541,7 +541,7 @@ if (editUserModal) {
     editUserModal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
         
-        const id = buton.getAttribute('data-id');
+        const id = button.getAttribute('data-id');
         const username = button.getAttribute('data-username');
         const email = button.getAttribute('data-email');
         const roleString = button.getAttribute('data-role');

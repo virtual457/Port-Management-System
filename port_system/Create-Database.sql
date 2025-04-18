@@ -2352,70 +2352,7 @@ BEGIN
 END//
 DELIMITER ;
 
-DELIMITER //
-CREATE PROCEDURE get_admin_cargo_stats()
-BEGIN
-    -- Get cargo by type
-    SELECT 
-        cargo_type,
-        COUNT(*) as cargo_count,
-        AVG(weight) as avg_weight
-    FROM cargo
-    GROUP BY cargo_type
-    ORDER BY cargo_count DESC;
-    
-    -- Get cargo by status
-    SELECT 
-        status,
-        COUNT(*) as cargo_count
-    FROM cargo
-    GROUP BY status
-    ORDER BY cargo_count DESC;
-    
-    -- Get cargo booking conversion rates
-    SELECT 
-        'overall' as metric,
-        COUNT(DISTINCT c.cargo_id) as total_cargo,
-        (SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
-        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings) as booked_cargo,
-        ((SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
-        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings)) / COUNT(DISTINCT c.cargo_id) * 100 as conversion_rate
-    FROM cargo c;
-END//
-DELIMITER ;
 
-DELIMITER //
-
-drop PROCEDURE if exists get_admin_cargo_stats;
-CREATE PROCEDURE get_admin_cargo_stats()
-BEGIN
-    -- Get cargo by type
-    SELECT 
-        cargo_type,
-        COUNT(*) as cargo_count,
-        AVG(weight) as avg_weight
-    FROM cargo
-    GROUP BY cargo_type
-    ORDER BY cargo_count DESC;
-    
-    -- Get cargo by status
-    SELECT 
-        status,
-        COUNT(*) as cargo_count
-    FROM cargo
-    GROUP BY status
-    ORDER BY cargo_count DESC;
-    
-    -- Get cargo booking conversion rates
-    SELECT 
-        'overall' as metric,
-        COUNT(DISTINCT c.cargo_id) as total_cargo,
-        (SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
-        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings) as booked_cargo,
-        ((SELECT COUNT(DISTINCT cargo_id) FROM cargo_bookings) +
-        (SELECT COUNT(DISTINCT cargo_id) FROM connected_bookings)) / COUNT(DISTINCT c.cargo_id) * 100 as conversion_rate
-    FROM cargo c;
-END//
 DELIMITER ;
 
 DELIMITER //
@@ -2563,7 +2500,6 @@ BEGIN
 END//
 DELIMITER ;
 
--- Fixed get_admin_cargo_stats procedure 
 DELIMITER //
 DROP PROCEDURE IF EXISTS get_admin_cargo_stats//
 CREATE PROCEDURE get_admin_cargo_stats()
@@ -2593,8 +2529,10 @@ BEGIN
             SELECT COUNT(DISTINCT cargo_id) FROM 
             (
                 SELECT cargo_id FROM cargo_bookings
+                where booking_status in ('completed', 'confirmed')
                 UNION
                 SELECT cargo_id FROM connected_bookings
+                where booking_status in ("completed", "confirmed")
             ) as booked
         ) as booked_cargo,
         (
@@ -2602,8 +2540,10 @@ BEGIN
                 SELECT COUNT(DISTINCT cargo_id) FROM 
                 (
                     SELECT cargo_id FROM cargo_bookings
+                    where booking_status in ('completed', 'confirmed')
                     UNION
                     SELECT cargo_id FROM connected_bookings
+                    where booking_status in ("completed", "confirmed")
                 ) as booked
             ) / COUNT(DISTINCT c.cargo_id) * 100
         ) as conversion_rate
@@ -4232,3 +4172,446 @@ BEGIN
 END//
 
 DELIMITER ;
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS delete_user //
+
+CREATE PROCEDURE delete_user(
+    IN p_user_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE username VARCHAR(50);
+    DECLARE cargo_count INT DEFAULT 0;
+    DECLARE bookings_count INT DEFAULT 0;
+    DECLARE ships_count INT DEFAULT 0;
+    DECLARE routes_count INT DEFAULT 0;
+    
+    -- Get username for message
+    SELECT username INTO username FROM users WHERE user_id = p_user_id;
+    IF username IS NULL THEN
+        select user_id into username from users where user_id = p_user_id;
+    END IF;
+    
+    IF username IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'User not found.';
+    ELSE
+        -- Check if user has any cargo
+        SELECT COUNT(*) INTO cargo_count FROM cargo WHERE user_id = p_user_id;
+        
+        -- Check if user has any bookings (direct or connected)
+        SELECT 
+            (SELECT COUNT(*) FROM cargo_bookings WHERE user_id = p_user_id) +
+            (SELECT COUNT(*) FROM connected_bookings WHERE user_id = p_user_id)
+        INTO bookings_count;
+        
+        -- Check if user owns any ships
+        SELECT COUNT(*) INTO ships_count FROM ships WHERE owner_id = p_user_id;
+        
+        -- Check if user owns any routes
+        SELECT COUNT(*) INTO routes_count FROM routes WHERE owner_id = p_user_id;
+        
+        -- Only delete if no dependencies exist
+        IF cargo_count > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete user "', username, '". User has ', cargo_count, ' cargo items. Please delete them first.');
+        ELSEIF bookings_count > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete user "', username, '". User has ', bookings_count, ' bookings. Please delete them first.');
+        ELSEIF ships_count > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete user "', username, '". User owns ', ships_count, ' ships. Please reassign or delete them first.');
+        ELSEIF routes_count > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete user "', username, '". User owns ', routes_count, ' routes. Please reassign or delete them first.');
+        ELSE
+            -- Safe to delete
+            DELETE FROM user_roles WHERE user_id = p_user_id;
+            DELETE FROM users WHERE user_id = p_user_id;
+            
+            SET p_success = TRUE;
+            SET p_message = CONCAT('User "', username, '" deleted successfully!');
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+
+
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS edit_user //
+
+CREATE PROCEDURE edit_user(
+    IN p_user_id INT,
+    IN p_username VARCHAR(50),
+    IN p_email VARCHAR(100),
+    IN p_password VARCHAR(255),
+    IN p_roles VARCHAR(255),
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE existing_username VARCHAR(50);
+    DECLARE email_exists INT DEFAULT 0;
+    DECLARE role_id_val INT;
+    DECLARE role_name_val VARCHAR(50);
+    DECLARE role_exists BOOLEAN;
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE roles_cursor CURSOR FOR SELECT value FROM roles_temp;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Create temporary table for roles
+    DROP TEMPORARY TABLE IF EXISTS roles_temp;
+    CREATE TEMPORARY TABLE roles_temp (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        value VARCHAR(50)
+    );
+    
+    -- Parse the roles string into the temporary table
+    SET @sql = CONCAT("INSERT INTO roles_temp (value) VALUES ('", REPLACE(p_roles, ",", "'),('"), "')");
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    
+    -- Check if user exists
+    SELECT username INTO existing_username FROM users WHERE user_id = p_user_id;
+    
+    IF existing_username IS NULL THEN
+        SET p_success = FALSE;
+        SET p_message = 'User not found.';
+    ELSE
+        -- Check if email is already in use by another user
+        SELECT COUNT(*) INTO email_exists 
+        FROM users 
+        WHERE email = p_email AND user_id != p_user_id;
+        
+        IF email_exists > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Email "', p_email, '" is already in use by another user.');
+        ELSE
+            START TRANSACTION;
+            
+            -- Update user information
+            IF p_password IS NOT NULL AND p_password != '' THEN
+                UPDATE users 
+                SET username = p_username, 
+                    email = p_email, 
+                    password = p_password 
+                WHERE user_id = p_user_id;
+            ELSE
+                UPDATE users 
+                SET username = p_username, 
+                    email = p_email 
+                WHERE user_id = p_user_id;
+            END IF;
+            
+            -- Delete existing roles
+            DELETE FROM user_roles WHERE user_id = p_user_id;
+            
+            -- Check if all roles exist and add them
+            OPEN roles_cursor;
+            
+            roles_loop: LOOP
+                FETCH roles_cursor INTO role_name_val;
+                IF done THEN
+                    LEAVE roles_loop;
+                END IF;
+                
+                -- Check if role exists
+                SELECT role_id INTO role_id_val 
+                FROM roles 
+                WHERE role_name = role_name_val;
+                
+                IF role_id_val IS NULL THEN
+                    SET p_success = FALSE;
+                    SET p_message = CONCAT('Role "', role_name_val, '" does not exist.');
+                    ROLLBACK;
+                    CLOSE roles_cursor;
+                    LEAVE roles_loop;
+                ELSE
+                    -- Add role to user
+                    INSERT INTO user_roles (user_id, role_id)
+                    VALUES (p_user_id, role_id_val);
+                END IF;
+            END LOOP;
+            
+            CLOSE roles_cursor;
+            
+            IF p_success IS NULL THEN
+                SET p_success = TRUE;
+                SET p_message = CONCAT('User "', p_username, '" updated successfully!');
+                COMMIT;
+            END IF;
+        END IF;
+    END IF;
+    
+    -- Clean up
+    DROP TEMPORARY TABLE IF EXISTS roles_temp;
+END//
+
+DELIMITER ;
+
+-- berth related procedures
+DELIMITER //
+
+-- Procedure to add a new berth with validation
+DROP PROCEDURE IF EXISTS add_new_berth //
+
+CREATE PROCEDURE add_new_berth(
+    IN p_port_id INT,
+    IN p_berth_number VARCHAR(20),
+    IN p_type VARCHAR(50),
+    IN p_length DECIMAL(10, 2),
+    IN p_width DECIMAL(10, 2),
+    IN p_depth DECIMAL(10, 2),
+    IN p_status VARCHAR(20),
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE port_exists INT;
+    DECLARE berth_exists INT;
+    DECLARE port_name VARCHAR(100);
+    
+    -- Check if the port exists and get its name
+    SELECT COUNT(*) INTO port_exists
+    FROM ports 
+    WHERE port_id = p_port_id
+    AND status = 'active';
+    
+    -- Get port name separately
+    SELECT name INTO port_name
+    FROM ports
+    WHERE port_id = p_port_id;
+    
+    IF port_exists = 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'The selected port does not exist or is inactive.';
+    ELSE
+        -- Check if the berth number already exists for this port
+        SELECT COUNT(*) INTO berth_exists
+        FROM berths
+        WHERE port_id = p_port_id AND berth_number = p_berth_number;
+        
+        IF berth_exists > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Berth number "', p_berth_number, '" already exists for port "', port_name, '".');
+        ELSEIF p_length <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth length must be greater than zero.';
+        ELSEIF p_width <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth width must be greater than zero.';
+        ELSEIF p_depth <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth depth must be greater than zero.';
+        ELSE
+            -- Insert the new berth
+            INSERT INTO berths (
+                port_id, berth_number, type, length, width, depth, status
+            ) VALUES (
+                p_port_id, p_berth_number, p_type, p_length, p_width, p_depth, p_status
+            );
+            
+            SET p_success = TRUE;
+            SET p_message = CONCAT('Berth "', p_berth_number, '" has been added successfully to port "', port_name, '".');
+        END IF;
+    END IF;
+END//
+
+-- Procedure to edit an existing berth with validation
+DROP PROCEDURE IF EXISTS edit_berth //
+
+CREATE PROCEDURE edit_berth(
+    IN p_berth_id INT,
+    IN p_port_id INT,
+    IN p_berth_number VARCHAR(20),
+    IN p_type VARCHAR(50),
+    IN p_length DECIMAL(10, 2),
+    IN p_width DECIMAL(10, 2),
+    IN p_depth DECIMAL(10, 2),
+    IN p_status VARCHAR(20),
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE berth_exists INT;
+    DECLARE existing_berth_number VARCHAR(20);
+    DECLARE port_name VARCHAR(100);
+    DECLARE duplicate_exists INT;
+    
+    -- Check if the berth exists and get its number
+    SELECT COUNT(*) INTO berth_exists
+    FROM berths
+    WHERE berth_id = p_berth_id;
+    
+    -- Get berth number separately
+    SELECT berth_number INTO existing_berth_number
+    FROM berths
+    WHERE berth_id = p_berth_id;
+    
+    IF berth_exists = 0 THEN
+        SET p_success = FALSE;
+        SET p_message = 'The selected berth does not exist.';
+    ELSE
+        -- Get port name for message
+        SELECT name INTO port_name
+        FROM ports
+        WHERE port_id = p_port_id;
+        
+        -- Check for duplicate berth number
+        SELECT COUNT(*) INTO duplicate_exists
+        FROM berths
+        WHERE port_id = p_port_id 
+        AND berth_number = p_berth_number 
+        AND berth_id != p_berth_id;
+        
+        IF duplicate_exists > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Berth number "', p_berth_number, '" is already in use by another berth at port "', port_name, '".');
+        ELSEIF p_length <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth length must be greater than zero.';
+        ELSEIF p_width <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth width must be greater than zero.';
+        ELSEIF p_depth <= 0 THEN
+            SET p_success = FALSE;
+            SET p_message = 'Berth depth must be greater than zero.';
+        ELSE
+            -- Update the berth
+            UPDATE berths
+            SET berth_number = p_berth_number,
+                type = p_type,
+                length = p_length,
+                width = p_width,
+                depth = p_depth,
+                status = p_status
+            WHERE berth_id = p_berth_id;
+            
+            SET p_success = TRUE;
+            SET p_message = CONCAT('Berth "', p_berth_number, '" has been updated successfully.');
+        END IF;
+    END IF;
+END//
+
+-- Procedure to delete a berth with proper checks
+DELIMITER //
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS delete_berth //
+
+CREATE PROCEDURE delete_berth(
+    IN p_berth_id INT,
+    OUT p_success BOOLEAN,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE berth_exists INT DEFAULT 0;
+    DECLARE berth_number VARCHAR(20) DEFAULT NULL;
+    DECLARE berth_status VARCHAR(20) DEFAULT NULL;
+    DECLARE assignment_count INT DEFAULT 0;
+    DECLARE port_name VARCHAR(100) DEFAULT NULL;
+    DECLARE port_id_val INT DEFAULT NULL;
+    
+    -- Initialize output parameters
+    SET p_success = FALSE;
+    SET p_message = 'An error occurred during the deletion process.';
+    
+    -- Check if berth exists
+    SELECT COUNT(*) INTO berth_exists
+    FROM berths
+    WHERE berth_id = p_berth_id;
+    
+    IF berth_exists = 0 THEN
+        SET p_success = FALSE;
+        SET p_message = CONCAT('The berth with ID ', p_berth_id, ' does not exist.');
+    ELSE
+        -- Get berth number and status separately to avoid issues
+        SELECT berth_number INTO berth_number 
+        FROM berths 
+        WHERE berth_id = p_berth_id;
+        
+        SELECT status INTO berth_status 
+        FROM berths 
+        WHERE berth_id = p_berth_id;
+        
+        SELECT port_id INTO port_id_val 
+        FROM berths 
+        WHERE berth_id = p_berth_id;
+        
+        -- Get port name
+        IF port_id_val IS NOT NULL THEN
+            SELECT name INTO port_name 
+            FROM ports 
+            WHERE port_id = port_id_val;
+        END IF;
+        
+        -- Use default values if any data is missing
+        IF berth_number IS NULL THEN
+            SET berth_number = CONCAT('ID:', p_berth_id);
+        END IF;
+        
+        IF port_name IS NULL THEN
+            SET port_name = 'Unknown Port';
+        END IF;
+        
+        -- Check for assignments
+        SELECT COUNT(*) INTO assignment_count
+        FROM berth_assignments
+        WHERE berth_id = p_berth_id AND status = 'active';
+        
+        -- Perform validation
+        IF berth_status = 'occupied' THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete berth "', berth_number, '" because it is currently occupied.');
+        ELSEIF assignment_count > 0 THEN
+            SET p_success = FALSE;
+            SET p_message = CONCAT('Cannot delete berth "', berth_number, '" because it has ', assignment_count, ' active assignments.');
+        ELSE
+            -- Safe to delete
+            START TRANSACTION;
+            
+            DELETE FROM berths WHERE berth_id = p_berth_id;
+            
+            IF ROW_COUNT() > 0 THEN
+                SET p_success = TRUE;
+                SET p_message = CONCAT('Berth "', berth_number, '" has been deleted successfully from port "', port_name, '".');
+                COMMIT;
+            ELSE
+                SET p_success = FALSE;
+                SET p_message = CONCAT('Failed to delete berth "', berth_number, '". No rows affected.');
+                ROLLBACK;
+            END IF;
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
+
+DELIMITER ;
+
+select * from berths;
+
+select * from berth_assignments;
+
+select * from berths where berth_id = 77;
+
+select * from ports where port_id = 87;
+
+-- Set the output variables
+SET @p_success = NULL;
+SET @p_message = '';
+
+-- Call the stored procedure with the berth_id parameter
+CALL delete_berth(77, @p_success, @p_message);
+
+-- Retrieve the output values
+SELECT @p_success AS success, @p_message AS message;
+
+

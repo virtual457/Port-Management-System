@@ -83,24 +83,20 @@ def add_berth(request):
         
         try:
             with connection.cursor() as cursor:
+                # Call the stored procedure
+                cursor.execute("SET @p_success = 0, @p_message = '';")
                 cursor.execute(
-                    "SELECT COUNT(*) FROM berths WHERE port_id = %s AND berth_number = %s",
-                    [port_id, berth_number]
-                )
-                if cursor.fetchone()[0] > 0:
-                    messages.error(request, f"Berth number {berth_number} already exists for this port.")
-                    return redirect(f'/admin/manage-berths?port_id={port_id}')
-                
-                cursor.execute(
-                    """
-                    INSERT INTO berths 
-                    (port_id, berth_number, type, length, width, depth, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
+                    "CALL add_new_berth(%s, %s, %s, %s, %s, %s, %s, @p_success, @p_message);",
                     [port_id, berth_number, berth_type, length, width, depth, status]
                 )
+                cursor.execute("SELECT @p_success, @p_message;")
+                result = cursor.fetchone()
+                success, message = result[0], result[1]
                 
-                messages.success(request, f"Berth {berth_number} has been added successfully.")
+                if success:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
         except Exception as e:
             messages.error(request, f"Error adding berth: {str(e)}")
         
@@ -122,27 +118,20 @@ def edit_berth(request):
         
         try:
             with connection.cursor() as cursor:
+                # Call the stored procedure
+                cursor.execute("SET @p_success = 0, @p_message = '';")
                 cursor.execute(
-                    """
-                    SELECT COUNT(*) FROM berths 
-                    WHERE port_id = %s AND berth_number = %s AND berth_id != %s
-                    """,
-                    [port_id, berth_number, berth_id]
+                    "CALL edit_berth(%s, %s, %s, %s, %s, %s, %s, %s, @p_success, @p_message);",
+                    [berth_id, port_id, berth_number, berth_type, length, width, depth, status]
                 )
-                if cursor.fetchone()[0] > 0:
-                    messages.error(request, f"Berth number {berth_number} is already in use by another berth.")
-                    return redirect(f'/admin/manage-berths?port_id={port_id}')
+                cursor.execute("SELECT @p_success, @p_message;")
+                result = cursor.fetchone()
+                success, message = result[0], result[1]
                 
-                cursor.execute(
-                    """
-                    UPDATE berths 
-                    SET berth_number = %s, type = %s, length = %s, width = %s, depth = %s, status = %s
-                    WHERE berth_id = %s
-                    """,
-                    [berth_number, berth_type, length, width, depth, status, berth_id]
-                )
-                
-                messages.success(request, f"Berth {berth_number} has been updated successfully.")
+                if success:
+                    messages.success(request, message)
+                else:
+                    messages.error(request, message)
         except Exception as e:
             messages.error(request, f"Error updating berth: {str(e)}")
         
@@ -152,28 +141,33 @@ def edit_berth(request):
 
 
 def delete_berth(request):
+    print("delete berth")
     if request.method == 'POST':
+        print("delete berth post")
         berth_id = request.POST.get('berth_id')
         port_id = request.POST.get('port_id')
         
         try:
-            berth_number = ""
+            print(berth_id)
             with connection.cursor() as cursor:
-                cursor.execute("SELECT berth_number FROM berths WHERE berth_id = %s", [berth_id])
+                cursor.execute("SET @p_success = 0, @p_message = '';")
+                cursor.execute(
+                    "CALL delete_berth(%s, @p_success, @p_message);",
+                    [berth_id]
+                )
+                cursor.execute("SELECT @p_success, @p_message;")
                 result = cursor.fetchone()
-                if result:
-                    berth_number = result[0]
-                
-                cursor.execute("SELECT status FROM berths WHERE berth_id = %s", [berth_id])
-                result = cursor.fetchone()
-                if result and result[0] == 'occupied':
-                    messages.error(request, f"Cannot delete berth {berth_number} because it is currently occupied.")
-                    return redirect(f'/admin/manage-berths?port_id={port_id}')
-                
-                cursor.execute("DELETE FROM berths WHERE berth_id = %s", [berth_id])
-                
-                messages.success(request, f"Berth {berth_number} has been deleted successfully.")
+                success, message = result[0], result[1]
+                print("delete berth result")
+                if success:
+                    print("delete berth success")
+                    messages.success(request, message)
+                else:
+                    print("delete berth error")
+                    print(message)
+                    messages.error(request,  f"Cannot delete berth: {message}")
         except Exception as e:
+            print(e)
             messages.error(request, f"Error deleting berth: {str(e)}")
         
         return redirect(f'/admin/manage-berths?port_id={port_id}')
