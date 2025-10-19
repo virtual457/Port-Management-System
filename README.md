@@ -15,10 +15,12 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <h3 align="center">🚢 Port Management System</h3>
+  <h3 align="center">🚢 Port Management System - ADVANCED DATABASE PROJECT ⭐</h3>
 
   <p align="center">
-    Advanced Database-Driven Maritime Logistics Platform built with Django and MySQL, featuring advanced database design, complex pathfinding algorithms, and comprehensive maritime logistics management capabilities.
+    <strong>🎯 PORTFOLIO SHOWCASE:</strong> Advanced Database-Driven Maritime Logistics Platform built with Django and MySQL, featuring advanced database design, complex pathfinding algorithms, and comprehensive maritime logistics management capabilities.
+    <br/>
+    <em>Last Updated: 2025-01-19 | Advanced Database & SQL Project</em>
     <br />
     <a href="https://github.com/virtual457/Port-Management-System"><strong>Explore the docs »</strong></a>
     <br />
