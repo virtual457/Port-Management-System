@@ -15,7 +15,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <h3 align="center">🚢 Port Management System - ADVANCED DATABASE PROJECT ⭐</h3>
+  <h3 align="center">🚢 Port Management System - ADVANCED DATABASE PROJECT</h3>
 
   <p align="center">
     <strong>🎯 PORTFOLIO SHOWCASE:</strong> Advanced Database-Driven Maritime Logistics Platform built with Django and MySQL, featuring advanced database design, complex pathfinding algorithms, and comprehensive maritime logistics management capabilities.
